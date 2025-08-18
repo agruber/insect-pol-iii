@@ -23,13 +23,13 @@ def generate_cmsearch_commands(species_names, models_file, output_dir="genomes",
             
         species_dir = f"{output_dir}/{species}"
         genome_symlink = f"{species_dir}/genome.fna.gz"
-        output_file = f"{species_dir}/cmsearch_results.txt"
-        output_gz = f"{species_dir}/cmsearch_results.txt.gz"
+        cmsearch_output = f"{species_dir}/cmsearch_results.txt"
+        cmsearch_gz = f"{species_dir}/cmsearch_results.txt.gz"
         
         # Check if genome symlink exists and points to a valid file
         if os.path.islink(genome_symlink) and os.path.exists(genome_symlink):
-            # Check if results already exist
-            if os.path.exists(output_file) or os.path.exists(output_gz):
+            # Check if cmsearch results already exist
+            if os.path.exists(cmsearch_output) or os.path.exists(cmsearch_gz):
                 skipped_species.append(species)  # Already processed
             else:
                 valid_species.append(species)
@@ -44,15 +44,22 @@ def generate_cmsearch_commands(species_names, models_file, output_dir="genomes",
     for idx, species in enumerate(valid_species):
         species_dir = f"{output_dir}/{species}"
         genome_symlink = f"{species_dir}/genome.fna.gz"
-        temp_fasta = f"{species_dir}/temp_genome.fna"
-        output_file = f"{species_dir}/cmsearch_results.txt"
         
-        # Generate commands for this species (no need for bash conditionals)
+        # Use the actual genome filename (without .gz) to preserve version info
+        # Read the symlink target to get the actual filename
+        if os.path.islink(genome_symlink):
+            actual_filename = os.readlink(genome_symlink)
+            # Remove .gz extension to get the uncompressed name
+            temp_fasta = f"{species_dir}/{actual_filename.replace('.gz', '')}"
+        else:
+            temp_fasta = f"{species_dir}/genome.fna"
+            
+        cmsearch_output = f"{species_dir}/cmsearch_results.txt"
         species_commands = [
             f"echo 'Processing {species}...'",
             f"gunzip -c '{genome_symlink}' > '{temp_fasta}'",
-            f"cmsearch --tblout '{output_file}' --noali '{models_file}' '{temp_fasta}'",
-            f"gzip '{output_file}'",
+            f"cmsearch --tblout '{cmsearch_output}' --noali '{models_file}' '{temp_fasta}'",
+            f"gzip '{cmsearch_output}'",
             f"rm '{temp_fasta}'",
             f"echo 'Completed {species}'"
         ]

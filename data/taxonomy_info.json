@@ -1,0 +1,527 @@
+{
+    "Arthropoda": {
+        "english": "Arthropods",
+        "german": "Gliederfüßer",
+        "description": "Joint-legged invertebrates with segmented bodies and exoskeleton"
+    },
+    "Mollusca": {
+        "english": "Mollusks",
+        "german": "Weichtiere",
+        "description": "Soft-bodied invertebrates, often with shells"
+    },
+    "Cnidaria": {
+        "english": "Cnidarians",
+        "german": "Nesseltiere",
+        "description": "Aquatic animals with stinging cells (jellyfish, corals)"
+    },
+    "Nematoda": {
+        "english": "Roundworms",
+        "german": "Rundwürmer",
+        "description": "Cylindrical worms with complete digestive system"
+    },
+    "Platyhelminthes": {
+        "english": "Flatworms",
+        "german": "Plattwürmer",
+        "description": "Bilaterally symmetrical, flattened worms"
+    },
+    "Annelida": {
+        "english": "Segmented worms",
+        "german": "Ringelwürmer",
+        "description": "Worms with segmented bodies (earthworms, leeches)"
+    },
+    "Porifera": {
+        "english": "Sponges",
+        "german": "Schwämme",
+        "description": "Simple aquatic filter-feeding animals"
+    },
+    "Chordata": {
+        "english": "Chordates",
+        "german": "Chordatiere",
+        "description": "Animals with spinal cord (vertebrates and relatives)"
+    },
+    "Rotifera": {
+        "english": "Rotifers",
+        "german": "Rädertierchen",
+        "description": "Microscopic aquatic animals with rotating cilia"
+    },
+    "Bryozoa": {
+        "english": "Moss animals",
+        "german": "Moostierchen",
+        "description": "Colonial aquatic filter feeders"
+    },
+    "Nemertea": {
+        "english": "Ribbon worms",
+        "german": "Schnurwürmer",
+        "description": "Marine worms with proboscis"
+    },
+    "Ctenophora": {
+        "english": "Comb jellies",
+        "german": "Rippenquallen",
+        "description": "Marine animals with comb-like cilia"
+    },
+    "Tardigrada": {
+        "english": "Water bears",
+        "german": "Bärtierchen",
+        "description": "Microscopic extremophile animals"
+    },
+    "Nematomorpha": {
+        "english": "Horsehair worms",
+        "german": "Saitenwürmer",
+        "description": "Parasitic worms resembling horsehair"
+    },
+    "Brachiopoda": {
+        "english": "Lamp shells",
+        "german": "Armfüßer",
+        "description": "Marine animals with bivalved shells"
+    },
+    "Onychophora": {
+        "english": "Velvet worms",
+        "german": "Stummelfüßer",
+        "description": "Caterpillar-like terrestrial invertebrates"
+    },
+    "Chaetognatha": {
+        "english": "Arrow worms",
+        "german": "Pfeilwürmer",
+        "description": "Marine planktonic predators"
+    },
+    "Priapulida": {
+        "english": "Penis worms",
+        "german": "Priapswürmer",
+        "description": "Marine burrowing worms"
+    },
+    "Acanthocephala": {
+        "english": "Spiny-headed worms",
+        "german": "Kratzer",
+        "description": "Parasitic worms with spiny proboscis"
+    },
+    "Insecta": {
+        "english": "Insects",
+        "german": "Insekten",
+        "description": "Six-legged arthropods with three body segments"
+    },
+    "Arachnida": {
+        "english": "Arachnids",
+        "german": "Spinnentiere",
+        "description": "Eight-legged arthropods (spiders, scorpions, mites)"
+    },
+    "Collembola": {
+        "english": "Springtails",
+        "german": "Springschwänze",
+        "description": "Small wingless arthropods with jumping organ"
+    },
+    "Malacostraca": {
+        "english": "Malacostracans",
+        "german": "Höhere Krebse",
+        "description": "Crustaceans including crabs, lobsters, shrimp"
+    },
+    "Hexanauplia": {
+        "english": "Copepods and barnacles",
+        "german": "Ruderfußkrebse und Rankenfußkrebse",
+        "description": "Small marine and freshwater crustaceans"
+    },
+    "Diplopoda": {
+        "english": "Millipedes",
+        "german": "Tausendfüßer",
+        "description": "Many-legged arthropods with two pairs of legs per segment"
+    },
+    "Branchiopoda": {
+        "english": "Branchiopods",
+        "german": "Kiemenfußkrebse",
+        "description": "Small freshwater crustaceans with leaf-like appendages"
+    },
+    "Chilopoda": {
+        "english": "Centipedes",
+        "german": "Hundertfüßer",
+        "description": "Predatory arthropods with one pair of legs per segment"
+    },
+    "Merostomata": {
+        "english": "Horseshoe crabs",
+        "german": "Pfeilschwanzkrebse",
+        "description": "Ancient marine arthropods with horseshoe-shaped carapace"
+    },
+    "Ostracoda": {
+        "english": "Seed shrimp",
+        "german": "Muschelkrebse",
+        "description": "Small crustaceans with bivalved carapace"
+    },
+    "Pycnogonida": {
+        "english": "Sea spiders",
+        "german": "Asselspinnen",
+        "description": "Marine arthropods with long legs"
+    },
+    "Symphyla": {
+        "english": "Symphylans",
+        "german": "Zwergfüßer",
+        "description": "Small soil-dwelling arthropods"
+    },
+    "Pauropoda": {
+        "english": "Pauropods",
+        "german": "Wenigfüßer",
+        "description": "Tiny soil arthropods with branched antennae"
+    },
+    "Lepidoptera": {
+        "english": "Butterflies and moths",
+        "german": "Schmetterlinge",
+        "description": "Insects with scaled wings and complete metamorphosis"
+    },
+    "Diptera": {
+        "english": "True flies",
+        "german": "Zweiflügler",
+        "description": "Two-winged insects including flies, mosquitoes, gnats"
+    },
+    "Hymenoptera": {
+        "english": "Ants, bees, and wasps",
+        "german": "Hautflügler",
+        "description": "Social and solitary insects with membrane wings"
+    },
+    "Coleoptera": {
+        "english": "Beetles",
+        "german": "Käfer",
+        "description": "Insects with hardened forewings (elytra)"
+    },
+    "Hemiptera": {
+        "english": "True bugs",
+        "german": "Schnabelkerfe",
+        "description": "Insects with piercing-sucking mouthparts"
+    },
+    "Trichoptera": {
+        "english": "Caddisflies",
+        "german": "Köcherfliegen",
+        "description": "Moth-like insects with aquatic larvae"
+    },
+    "Orthoptera": {
+        "english": "Grasshoppers and crickets",
+        "german": "Geradflügler",
+        "description": "Jumping insects with powerful hind legs"
+    },
+    "Odonata": {
+        "english": "Dragonflies and damselflies",
+        "german": "Libellen",
+        "description": "Aquatic predatory insects with large eyes"
+    },
+    "Blattodea": {
+        "english": "Cockroaches and termites",
+        "german": "Schaben",
+        "description": "Social and solitary scavenging insects"
+    },
+    "Thysanoptera": {
+        "english": "Thrips",
+        "german": "Fransenflügler",
+        "description": "Tiny insects with fringed wings"
+    },
+    "Plecoptera": {
+        "english": "Stoneflies",
+        "german": "Steinfliegen",
+        "description": "Aquatic insects sensitive to water quality"
+    },
+    "Neuroptera": {
+        "english": "Lacewings and antlions",
+        "german": "Netzflügler",
+        "description": "Insects with net-veined wings"
+    },
+    "Ephemeroptera": {
+        "english": "Mayflies",
+        "german": "Eintagsfliegen",
+        "description": "Short-lived aquatic insects"
+    },
+    "Phthiraptera": {
+        "english": "Lice",
+        "german": "Tierläuse",
+        "description": "Parasitic wingless insects"
+    },
+    "Phasmatodea": {
+        "english": "Stick and leaf insects",
+        "german": "Gespenstschrecken",
+        "description": "Camouflaged herbivorous insects"
+    },
+    "Mantodea": {
+        "english": "Mantids",
+        "german": "Fangschrecken",
+        "description": "Predatory insects with raptorial forelegs"
+    },
+    "Dermaptera": {
+        "english": "Earwigs",
+        "german": "Ohrwürmer",
+        "description": "Insects with forceps-like cerci"
+    },
+    "Embioptera": {
+        "english": "Webspinners",
+        "german": "Tarsenspinner",
+        "description": "Colonial silk-spinning insects"
+    },
+    "Grylloblattodea": {
+        "english": "Ice crawlers",
+        "german": "Grillenschaben",
+        "description": "Cold-adapted wingless insects"
+    },
+    "Mantophasmatodea": {
+        "english": "Gladiators",
+        "german": "Gladiatoren",
+        "description": "Recently discovered predatory insects"
+    },
+    "Megaloptera": {
+        "english": "Alderflies and dobsonflies",
+        "german": "Großflügler",
+        "description": "Aquatic insects with large wings"
+    },
+    "Raphidioptera": {
+        "english": "Snakeflies",
+        "german": "Kamelhalsfliegen",
+        "description": "Predatory insects with elongated prothorax"
+    },
+    "Strepsiptera": {
+        "english": "Twisted-wing parasites",
+        "german": "Fächerflügler",
+        "description": "Endoparasitic insects with twisted wings"
+    },
+    "Siphonaptera": {
+        "english": "Fleas",
+        "german": "Flöhe",
+        "description": "Wingless jumping parasites"
+    },
+    "Mecoptera": {
+        "english": "Scorpionflies",
+        "german": "Schnabelfliegen",
+        "description": "Insects with elongated mouthparts"
+    },
+    "Zoraptera": {
+        "english": "Zorapterans",
+        "german": "Bodläuse",
+        "description": "Small colonial insects"
+    },
+    "Notoptera": {
+        "english": "Grylloblattids",
+        "german": "Grillenschaben",
+        "description": "Cold-adapted insects"
+    },
+    "Psocoptera": {
+        "english": "Booklice and barklice",
+        "german": "Staubläuse",
+        "description": "Small scavenging insects"
+    },
+    "Andrenidae": {
+        "english": "Mining bees",
+        "german": "Sandbienen",
+        "description": "Solitary ground-nesting bees"
+    },
+    "Apidae": {
+        "english": "Honey bees, bumble bees",
+        "german": "Echte Bienen",
+        "description": "Social and cleptoparasitic bees including honey bees"
+    },
+    "Halictidae": {
+        "english": "Sweat bees",
+        "german": "Furchenbienen",
+        "description": "Small metallic bees, some attracted to sweat"
+    },
+    "Megachilidae": {
+        "english": "Leafcutter and mason bees",
+        "german": "Bauchsammlerbienen",
+        "description": "Solitary bees that collect pollen on abdomen"
+    },
+    "Colletidae": {
+        "english": "Plasterer bees",
+        "german": "Urbienen",
+        "description": "Primitive bees that line nests with secretions"
+    },
+    "Melittidae": {
+        "english": "Melittid bees",
+        "german": "Sägehornbienen",
+        "description": "Small family of primitive bees"
+    },
+    "Formicidae": {
+        "english": "Ants",
+        "german": "Ameisen",
+        "description": "Eusocial insects living in colonies"
+    },
+    "Vespidae": {
+        "english": "Wasps",
+        "german": "Echte Wespen",
+        "description": "Social and solitary wasps including hornets"
+    },
+    "Pompilidae": {
+        "english": "Spider wasps",
+        "german": "Wegwespen",
+        "description": "Solitary wasps that hunt spiders"
+    },
+    "Sphecidae": {
+        "english": "Digger wasps",
+        "german": "Grabwespen",
+        "description": "Solitary wasps that provision nests with prey"
+    },
+    "Ichneumonidae": {
+        "english": "Ichneumon wasps",
+        "german": "Schlupfwespen",
+        "description": "Large family of parasitoid wasps"
+    },
+    "Braconidae": {
+        "english": "Braconid wasps",
+        "german": "Brackwespen",
+        "description": "Parasitoid wasps, many used in biocontrol"
+    },
+    "Nymphalidae": {
+        "english": "Brush-footed butterflies",
+        "german": "Edelfalter",
+        "description": "Large family including monarchs and admirals"
+    },
+    "Pieridae": {
+        "english": "Whites and sulphurs",
+        "german": "Weißlinge",
+        "description": "White, yellow, and orange butterflies"
+    },
+    "Lycaenidae": {
+        "english": "Blues, coppers, hairstreaks",
+        "german": "Bläulinge",
+        "description": "Small butterflies, often with metallic colors"
+    },
+    "Papilionidae": {
+        "english": "Swallowtail butterflies",
+        "german": "Ritterfalter",
+        "description": "Large butterflies with tail-like projections"
+    },
+    "Hesperiidae": {
+        "english": "Skippers",
+        "german": "Dickkopffalter",
+        "description": "Small butterflies with rapid flight"
+    },
+    "Noctuidae": {
+        "english": "Owlet moths",
+        "german": "Eulenfalter",
+        "description": "Large family of night-flying moths"
+    },
+    "Geometridae": {
+        "english": "Geometer moths",
+        "german": "Spanner",
+        "description": "Moths with larvae that move by looping"
+    },
+    "Sphingidae": {
+        "english": "Hawk moths",
+        "german": "Schwärmer",
+        "description": "Large moths with rapid hovering flight"
+    },
+    "Saturniidae": {
+        "english": "Giant silk moths",
+        "german": "Pfauenspinner",
+        "description": "Large moths including luna and cecropia moths"
+    },
+    "Tortricidae": {
+        "english": "Leafroller moths",
+        "german": "Wickler",
+        "description": "Small moths with larvae that roll leaves"
+    },
+    "Scarabaeidae": {
+        "english": "Scarab beetles",
+        "german": "Blatthornkäfer",
+        "description": "Beetles including dung beetles and chafers"
+    },
+    "Carabidae": {
+        "english": "Ground beetles",
+        "german": "Laufkäfer",
+        "description": "Predatory beetles, mostly nocturnal"
+    },
+    "Chrysomelidae": {
+        "english": "Leaf beetles",
+        "german": "Blattkäfer",
+        "description": "Plant-feeding beetles with diverse forms"
+    },
+    "Cerambycidae": {
+        "english": "Longhorn beetles",
+        "german": "Bockkäfer",
+        "description": "Beetles with long antennae and wood-boring larvae"
+    },
+    "Curculionidae": {
+        "english": "Weevils",
+        "german": "Rüsselkäfer",
+        "description": "Beetles with elongated snouts"
+    },
+    "Coccinellidae": {
+        "english": "Ladybirds",
+        "german": "Marienkäfer",
+        "description": "Small, often colorful predatory beetles"
+    },
+    "Elateridae": {
+        "english": "Click beetles",
+        "german": "Schnellkäfer",
+        "description": "Beetles that can flip themselves when overturned"
+    },
+    "Buprestidae": {
+        "english": "Jewel beetles",
+        "german": "Prachtkäfer",
+        "description": "Metallic beetles with wood-boring larvae"
+    },
+    "Culicidae": {
+        "english": "Mosquitoes",
+        "german": "Stechmücken",
+        "description": "Blood-sucking flies with aquatic larvae"
+    },
+    "Drosophilidae": {
+        "english": "Fruit flies",
+        "german": "Taufliegen",
+        "description": "Small flies associated with fermenting fruit"
+    },
+    "Tachinidae": {
+        "english": "Tachinid flies",
+        "german": "Raupenfliegen",
+        "description": "Parasitoid flies important in biocontrol"
+    },
+    "Syrphidae": {
+        "english": "Hoverflies",
+        "german": "Schwebfliegen",
+        "description": "Flies that mimic bees and wasps"
+    },
+    "Ceratopogonidae": {
+        "english": "Biting midges",
+        "german": "Gnitzen",
+        "description": "Small biting flies"
+    },
+    "Chironomidae": {
+        "english": "Non-biting midges",
+        "german": "Zuckmücken",
+        "description": "Aquatic flies resembling mosquitoes"
+    },
+    "Aphididae": {
+        "english": "Aphids",
+        "german": "Blattläuse",
+        "description": "Small plant-sucking insects"
+    },
+    "Cicadidae": {
+        "english": "Cicadas",
+        "german": "Singzikaden",
+        "description": "Large singing insects with long life cycles"
+    },
+    "Pentatomidae": {
+        "english": "Stink bugs",
+        "german": "Baumwanzen",
+        "description": "Shield-shaped bugs with scent glands"
+    },
+    "Miridae": {
+        "english": "Plant bugs",
+        "german": "Weichwanzen",
+        "description": "Diverse family of plant-feeding bugs"
+    },
+    "Araneae": {
+        "english": "Spiders",
+        "german": "Webspinnen",
+        "description": "Eight-legged predators that produce silk"
+    },
+    "Acari": {
+        "english": "Mites and ticks",
+        "german": "Milben",
+        "description": "Small arachnids, many parasitic"
+    },
+    "Scorpiones": {
+        "english": "Scorpions",
+        "german": "Skorpione",
+        "description": "Arachnids with pincers and venomous sting"
+    },
+    "Opiliones": {
+        "english": "Harvestmen",
+        "german": "Weberknechte",
+        "description": "Long-legged arachnids, not true spiders"
+    },
+    "Pseudoscorpiones": {
+        "english": "Pseudoscorpions",
+        "german": "Pseudoskorpione",
+        "description": "Small arachnids with pincers but no tail"
+    }
+}

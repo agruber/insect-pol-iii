@@ -1,2 +1,6 @@
-data/*
-genomes/*
+data/genomes.tsv
+data/genomes_annotated.tsv
+data/taxonomy.tsv
+data/shortNames.tsv
+genomes/*/*.fna
+genomes/*/*.fna.gz
