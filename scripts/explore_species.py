@@ -9,6 +9,8 @@ import pandas as pd
 import argparse
 from collections import defaultdict
 import os
+import time
+import json
 from taxonomy_info import format_taxon_display, get_taxon_description
 
 try:
@@ -58,35 +60,97 @@ class TreeNode:
         self.searched_count += searched
         self.trnascan_count += trnascan
     
-    def get_status_counts(self):
+    def get_status_counts(self, explorer=None):
         """Get total downloaded, searched, and tRNAscan counts for this subtree"""
-        downloaded = self.downloaded_count
-        searched = self.searched_count
-        trnascan = self.trnascan_count
+        if explorer and hasattr(explorer, 'status_cache'):
+            # Use cache for dynamic counting
+            return self._get_status_counts_from_cache(explorer)
+        else:
+            # Use pre-computed counts (legacy method)
+            downloaded = self.downloaded_count
+            searched = self.searched_count
+            trnascan = self.trnascan_count
+            
+            for child in self.children.values():
+                child_downloaded, child_searched, child_trnascan = child.get_status_counts(explorer)
+                downloaded += child_downloaded
+                searched += child_searched
+                trnascan += child_trnascan
+            
+            return downloaded, searched, trnascan
+    
+    def _get_status_counts_from_cache(self, explorer):
+        """Calculate status counts dynamically from cache"""
+        downloaded = 0
+        searched = 0
+        trnascan = 0
         
-        for child in self.children.values():
-            child_downloaded, child_searched, child_trnascan = child.get_status_counts()
-            downloaded += child_downloaded
-            searched += child_searched
-            trnascan += child_trnascan
+        # Get all species under this node
+        species_list = self._collect_all_species(explorer)
+        
+        for species_name in species_list:
+            cleaned_name = explorer.clean_species_name(species_name)
+            if cleaned_name in explorer.status_cache:
+                status = explorer.status_cache[cleaned_name]
+                if status.get('has_genome', False):
+                    downloaded += 1
+                if status.get('has_search', False):
+                    searched += 1
+                if status.get('has_trnascan', False):
+                    trnascan += 1
         
         return downloaded, searched, trnascan
+    
+    def _collect_all_species(self, explorer):
+        """Collect all species names under this node"""
+        species_list = []
+        
+        # Add species from this node
+        for species_idx in self.species_indices:
+            species_name = explorer.df.iloc[species_idx, 0]  # Column 0 is species name
+            species_list.append(species_name)
+        
+        # Add species from child nodes
+        for child in self.children.values():
+            species_list.extend(child._collect_all_species(explorer))
+        
+        return species_list
 
 class SpeciesTreeExplorer:
     def __init__(self, tsv_file, start_taxon=None):
+        start_time = time.time()
+        
+        print(f"Loading TSV file: {tsv_file}")
+        load_start = time.time()
         self.df = pd.read_csv(tsv_file, sep='\t', header=None)
+        print(f"  ✓ Loaded {len(self.df)} rows in {time.time() - load_start:.2f}s")
+        
         self.levels = ['phylum', 'class', 'order', 'family', 'genus', 'species']
         self.root = TreeNode("Root", -1)
         self.current_row = 0
         self.display_nodes = []
         self.selected_species = set()
         self.start_taxon = start_taxon or "Arthropoda"
+        self.status_cache = {}
         
         # Build the tree
+        tree_start = time.time()
         self.build_tree()
-        self.check_file_status()
+        print(f"  ✓ Built tree in {time.time() - tree_start:.2f}s")
+        
+        status_start = time.time()
+        self.load_file_status()
+        print(f"  ✓ Loaded file status in {time.time() - status_start:.2f}s")
+        
+        expand_start = time.time()
         self.auto_expand_to_start()
+        print(f"  ✓ Auto-expanded tree in {time.time() - expand_start:.2f}s")
+        
+        display_start = time.time()
         self.update_display()
+        print(f"  ✓ Updated display in {time.time() - display_start:.2f}s")
+        
+        print(f"Total initialization time: {time.time() - start_time:.2f}s")
     
     def clean_species_name(self, species_name):
         """Convert species name to filesystem-safe format"""
@@ -95,8 +159,14 @@ class SpeciesTreeExplorer:
     def build_tree(self):
         """Build the taxonomic tree from the dataframe"""
         print("Building taxonomic tree...")
+        processed_rows = 0
+        total_rows = len(self.df)
         
         for idx, row in self.df.iterrows():
+            processed_rows += 1
+            if processed_rows % 1000 == 0:
+                print(f"    Processed {processed_rows}/{total_rows} rows...")
+            
             # Extract taxonomy path: phylum, class, order, family, genus, species
             taxonomy = []
             
@@ -135,6 +205,65 @@ class SpeciesTreeExplorer:
         """Check if a species belongs to the target taxon"""
         return target_taxon in taxonomy_path
     
+    def load_file_status(self, cache_file="data/file_status_cache.json"):
+        """Load file status from cache or fall back to live scanning"""
+        if self.load_cached_file_status(cache_file):
+            return
+        
+        print("Cache not available or outdated, performing live scan...")
+        self.check_file_status()
+    
+    def load_cached_file_status(self, cache_file="data/file_status_cache.json"):
+        """Load file status from cached JSON file"""
+        try:
+            if not os.path.exists(cache_file):
+                print(f"  Cache file not found: {cache_file}")
+                return False
+            
+            with open(cache_file, 'r') as f:
+                cache_data = json.load(f)
+            
+            # Check cache age (refresh if older than 1 hour)
+            cache_timestamp = cache_data.get('timestamp', 0)
+            cache_age_hours = (time.time() - cache_timestamp) / 3600
+            
+            if cache_age_hours > 1:
+                print(f"  Cache is {cache_age_hours:.1f} hours old, refreshing...")
+                return False
+            
+            status_data = cache_data.get('status', {})
+            print(f"  Loading from cache ({len(status_data)} entries, {cache_age_hours:.1f}h old)...")
+            
+            # Count totals
+            counting_start = time.time()
+            total_downloaded = 0
+            total_searched = 0
+            total_trnascan = 0
+            
+            for species_name, status in status_data.items():
+                has_genome = status.get('has_genome', False)
+                has_search = status.get('has_search', False)
+                has_trnascan = status.get('has_trnascan', False)
+                
+                if has_genome:
+                    total_downloaded += 1
+                if has_search:
+                    total_searched += 1
+                if has_trnascan:
+                    total_trnascan += 1
+            
+            print(f"  Counted totals in {time.time() - counting_start:.2f}s")
+            
+            # Store cache data for dynamic lookups instead of marking tree
+            self.status_cache = status_data
+            print(f"  Cached status data for dynamic lookups")
+            print(f"  Found {total_downloaded} downloaded genomes, {total_searched} search results, {total_trnascan} tRNA scans")
+            return True
+            
+        except Exception as e:
+            print(f"  Error loading cache: {e}")
+            return False
+    
     def check_file_status(self):
         """Check which species have genomes downloaded, cmsearch results, and tRNAscan results"""
         print("Checking genome and search status...")
@@ -145,7 +274,15 @@ class SpeciesTreeExplorer:
         total_trnascan = 0
         
         if os.path.exists("genomes"):
-            for species_name in os.listdir("genomes"):
+            genome_dirs = os.listdir("genomes")
+            total_dirs = len([d for d in genome_dirs if os.path.isdir(f"genomes/{d}")])
+            print(f"  Found {total_dirs} species directories to check...")
+            
+            processed_dirs = 0
+            for species_name in genome_dirs:
+                processed_dirs += 1
+                if processed_dirs % 200 == 0:
+                    print(f"    Checked {processed_dirs}/{total_dirs} directories...")
                 species_dir = f"genomes/{species_name}"
                 if os.path.isdir(species_dir):
                     genome_file = f"{species_dir}/genome.fna.gz"
@@ -168,7 +305,13 @@ class SpeciesTreeExplorer:
                     if has_trnascan:
                         total_trnascan += 1
                     
-                    # Mark in tree if any file exists
+                    # Store in cache and mark in tree if any file exists
+                    self.status_cache[species_name] = {
+                        'has_genome': has_genome,
+                        'has_search': has_search,
+                        'has_trnascan': has_trnascan
+                    }
+                    
                     if has_genome or has_search or has_trnascan:
                         self._mark_species_status(species_name, has_genome, has_search, has_trnascan)
         
@@ -359,7 +502,7 @@ class SpeciesTreeExplorer:
             # Format taxon name with translations and status counts
             if not node.is_species:
                 total_count = node.get_species_count()
-                downloaded, searched, trnascan = node.get_status_counts()
+                downloaded, searched, trnascan = node.get_status_counts(self)
                 display_name = format_taxon_display(node.name, total_count)
                 if downloaded > 0 or searched > 0 or trnascan > 0:
                     display_name += f" [📥{downloaded} 🔍{searched} 🧬{trnascan}]"
@@ -538,7 +681,7 @@ class SpeciesTreeExplorer:
             print(f"Species count: {current_node.get_species_count()}")
             
             # Show status counts
-            downloaded, searched, trnascan = current_node.get_status_counts()
+            downloaded, searched, trnascan = current_node.get_status_counts(self)
             print(f"📥 Downloaded genomes: {downloaded}")
             print(f"🔍 Completed searches: {searched}")
             print(f"🧬 tRNA scans: {trnascan}")

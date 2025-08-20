@@ -2,5 +2,6 @@ data/genomes.tsv
 data/genomes_annotated.tsv
 data/taxonomy.tsv
 data/shortNames.tsv
+data/file_status_cache.json
 genomes/*/*.fna
 genomes/*/*.fna.gz
