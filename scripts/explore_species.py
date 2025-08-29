@@ -32,7 +32,6 @@ class TreeNode:
         self.is_species = False
         self.downloaded_count = 0
         self.searched_count = 0
-        self.trnascan_count = 0
         
     def add_species(self, species_idx, taxonomy_path):
         """Add a species following the taxonomy path"""
@@ -54,14 +53,13 @@ class TreeNode:
             count += child.get_species_count()
         return count
     
-    def update_status_counts(self, downloaded, searched, trnascan):
-        """Update download, search, and tRNAscan status counts for this node only"""
+    def update_status_counts(self, downloaded, searched):
+        """Update download and search status counts for this node only"""
         self.downloaded_count += downloaded
         self.searched_count += searched
-        self.trnascan_count += trnascan
     
     def get_status_counts(self, explorer=None):
-        """Get total downloaded, searched, and tRNAscan counts for this subtree"""
+        """Get total downloaded and searched counts for this subtree"""
         if explorer and hasattr(explorer, 'status_cache'):
             # Use cache for dynamic counting
             return self._get_status_counts_from_cache(explorer)
@@ -69,21 +67,18 @@ class TreeNode:
             # Use pre-computed counts (legacy method)
             downloaded = self.downloaded_count
             searched = self.searched_count
-            trnascan = self.trnascan_count
             
             for child in self.children.values():
-                child_downloaded, child_searched, child_trnascan = child.get_status_counts(explorer)
+                child_downloaded, child_searched = child.get_status_counts(explorer)
                 downloaded += child_downloaded
                 searched += child_searched
-                trnascan += child_trnascan
             
-            return downloaded, searched, trnascan
+            return downloaded, searched
     
     def _get_status_counts_from_cache(self, explorer):
         """Calculate status counts dynamically from cache"""
         downloaded = 0
         searched = 0
-        trnascan = 0
         
         # Get all species under this node
         species_list = self._collect_all_species(explorer)
@@ -96,10 +91,8 @@ class TreeNode:
                     downloaded += 1
                 if status.get('has_search', False):
                     searched += 1
-                if status.get('has_trnascan', False):
-                    trnascan += 1
         
-        return downloaded, searched, trnascan
+        return downloaded, searched
     
     def _collect_all_species(self, explorer):
         """Collect all species names under this node"""
@@ -238,26 +231,22 @@ class SpeciesTreeExplorer:
             counting_start = time.time()
             total_downloaded = 0
             total_searched = 0
-            total_trnascan = 0
             
             for species_name, status in status_data.items():
                 has_genome = status.get('has_genome', False)
                 has_search = status.get('has_search', False)
-                has_trnascan = status.get('has_trnascan', False)
                 
                 if has_genome:
                     total_downloaded += 1
                 if has_search:
                     total_searched += 1
-                if has_trnascan:
-                    total_trnascan += 1
             
             print(f"  Counted totals in {time.time() - counting_start:.2f}s")
             
             # Store cache data for dynamic lookups instead of marking tree
             self.status_cache = status_data
             print(f"  Cached status data for dynamic lookups")
-            print(f"  Found {total_downloaded} downloaded genomes, {total_searched} search results, {total_trnascan} tRNA scans")
+            print(f"  Found {total_downloaded} downloaded genomes, {total_searched} search results")
             return True
             
         except Exception as e:
@@ -265,13 +254,12 @@ class SpeciesTreeExplorer:
             return False
     
     def check_file_status(self):
-        """Check which species have genomes downloaded, cmsearch results, and tRNAscan results"""
+        """Check which species have genomes downloaded and cmsearch results"""
         print("Checking genome and search status...")
         
         # Count all files in genomes directory
         total_downloaded = 0
         total_searched = 0
-        total_trnascan = 0
         
         if os.path.exists("genomes"):
             genome_dirs = os.listdir("genomes")
@@ -287,7 +275,6 @@ class SpeciesTreeExplorer:
                 if os.path.isdir(species_dir):
                     genome_file = f"{species_dir}/genome.fna.gz"
                     search_results = f"{species_dir}/cmsearch_results.txt.gz"
-                    trnascan_results = f"{species_dir}/trnascan_results.gff.gz"
                     
                     # Check if genome is downloaded
                     has_genome = os.path.exists(genome_file) and os.path.islink(genome_file)
@@ -295,38 +282,33 @@ class SpeciesTreeExplorer:
                     # Check if cmsearch results exist
                     has_search = os.path.exists(search_results)
                     
-                    # Check if tRNAscan results exist
-                    has_trnascan = os.path.exists(trnascan_results)
                     
                     if has_genome:
                         total_downloaded += 1
                     if has_search:
                         total_searched += 1
-                    if has_trnascan:
-                        total_trnascan += 1
                     
                     # Store in cache and mark in tree if any file exists
                     self.status_cache[species_name] = {
                         'has_genome': has_genome,
-                        'has_search': has_search,
-                        'has_trnascan': has_trnascan
+                        'has_search': has_search
                     }
                     
-                    if has_genome or has_search or has_trnascan:
-                        self._mark_species_status(species_name, has_genome, has_search, has_trnascan)
+                    if has_genome or has_search:
+                        self._mark_species_status(species_name, has_genome, has_search)
         
-        print(f"Found {total_downloaded} downloaded genomes, {total_searched} search results, {total_trnascan} tRNA scans")
+        print(f"Found {total_downloaded} downloaded genomes, {total_searched} search results")
     
-    def _mark_species_status(self, species_name, has_genome, has_search, has_trnascan):
-        """Mark a species as downloaded/searched/trnascanned by finding it in the tree"""
+    def _mark_species_status(self, species_name, has_genome, has_search):
+        """Mark a species as downloaded/searched by finding it in the tree"""
         # Convert cleaned species name back to find in dataframe
         for idx, row in self.df.iterrows():
             if self.clean_species_name(row.iloc[0]) == species_name:
                 # Found the species, now mark it in the tree
-                self._update_species_status(idx, has_genome, has_search, has_trnascan)
+                self._update_species_status(idx, has_genome, has_search)
                 break
     
-    def _update_species_status(self, species_idx, has_genome, has_search, has_trnascan):
+    def _update_species_status(self, species_idx, has_genome, has_search):
         """Update status for a specific species in the tree"""
         row = self.df.iloc[species_idx]
         taxonomy = []
@@ -360,11 +342,10 @@ class SpeciesTreeExplorer:
         if species_name in current_node.children:
             species_node = current_node.children[species_name]
             # Only update if not already counted (avoid double counting)
-            if species_node.downloaded_count == 0 and species_node.searched_count == 0 and species_node.trnascan_count == 0:
+            if species_node.downloaded_count == 0 and species_node.searched_count == 0:
                 downloaded_increment = 1 if has_genome else 0
                 searched_increment = 1 if has_search else 0
-                trnascan_increment = 1 if has_trnascan else 0
-                species_node.update_status_counts(downloaded_increment, searched_increment, trnascan_increment)
+                species_node.update_status_counts(downloaded_increment, searched_increment)
     
     def auto_expand_to_start(self):
         """Auto-expand tree to show the start taxon"""
@@ -502,25 +483,22 @@ class SpeciesTreeExplorer:
             # Format taxon name with translations and status counts
             if not node.is_species:
                 total_count = node.get_species_count()
-                downloaded, searched, trnascan = node.get_status_counts(self)
+                downloaded, searched = node.get_status_counts(self)
                 display_name = format_taxon_display(node.name, total_count)
-                if downloaded > 0 or searched > 0 or trnascan > 0:
-                    display_name += f" [📥{downloaded} 🔍{searched} 🧬{trnascan}]"
+                if downloaded > 0 or searched > 0:
+                    display_name += f" [📥{downloaded} 🔍{searched}]"
             else:
                 # For species nodes, show individual status
                 species_name = self.clean_species_name(node.name)
                 species_dir = f"genomes/{species_name}"
                 has_genome = os.path.exists(f"{species_dir}/genome.fna.gz")
                 has_search = os.path.exists(f"{species_dir}/cmsearch_results.txt.gz")
-                has_trnascan = os.path.exists(f"{species_dir}/trnascan_results.gff.gz")
                 
                 status_icons = ""
                 if has_genome:
                     status_icons += "📥"
                 if has_search:
                     status_icons += "🔍"
-                if has_trnascan:
-                    status_icons += "🧬"
                 
                 display_name = node.name
                 if status_icons:
@@ -681,17 +659,14 @@ class SpeciesTreeExplorer:
             print(f"Species count: {current_node.get_species_count()}")
             
             # Show status counts
-            downloaded, searched, trnascan = current_node.get_status_counts(self)
+            downloaded, searched = current_node.get_status_counts(self)
             print(f"📥 Downloaded genomes: {downloaded}")
             print(f"🔍 Completed searches: {searched}")
-            print(f"🧬 tRNA scans: {trnascan}")
             if current_node.get_species_count() > 0:
                 download_percent = (downloaded / current_node.get_species_count()) * 100
                 search_percent = (searched / current_node.get_species_count()) * 100
-                trnascan_percent = (trnascan / current_node.get_species_count()) * 100
                 print(f"Download progress: {download_percent:.1f}%")
                 print(f"Search progress: {search_percent:.1f}%")
-                print(f"tRNA scan progress: {trnascan_percent:.1f}%")
             
             print(f"\nDescription:")
             print(f"  {info['description']}")

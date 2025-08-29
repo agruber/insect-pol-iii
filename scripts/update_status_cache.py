@@ -37,15 +37,13 @@ def scan_file_status(genomes_dir="genomes"):
             if processed % 200 == 0 or processed == total_dirs:
                 print(f"  Processed {processed}/{total_dirs} species directories...")
             
-            # Check for genome, cmsearch results, and trnascan results
+            # Check for genome and cmsearch results
             genome_file = os.path.join(species_dir, "genome.fna.gz")
             search_results = os.path.join(species_dir, "cmsearch_results.txt.gz")
-            trnascan_results = os.path.join(species_dir, "trnascan_results.gff.gz")
             
             status_data[species_name] = {
                 'has_genome': os.path.exists(genome_file) and os.path.islink(genome_file),
-                'has_search': os.path.exists(search_results),
-                'has_trnascan': os.path.exists(trnascan_results)
+                'has_search': os.path.exists(search_results)
             }
     
     return status_data
@@ -84,13 +82,11 @@ def main():
     total_species = len(status_data)
     total_downloaded = sum(1 for s in status_data.values() if s['has_genome'])
     total_searched = sum(1 for s in status_data.values() if s['has_search'])
-    total_trnascan = sum(1 for s in status_data.values() if s['has_trnascan'])
     
     print(f"\nSummary:")
     print(f"  Total species directories: {total_species}")
     print(f"  Downloaded genomes: {total_downloaded}")
     print(f"  cmsearch results: {total_searched}")
-    print(f"  tRNAscan results: {total_trnascan}")
     
     # Save cache
     save_status_cache(status_data, cache_file)
