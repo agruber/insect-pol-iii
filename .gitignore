@@ -3,5 +3,11 @@ data/genomes_annotated.tsv
 data/taxonomy.tsv
 data/shortNames.tsv
 data/file_status_cache.json
+data/models/*.cm
+data/models/*.i1f
+data/models/*.i1i
+data/models/*.i1m
+data/models/*.i1p
+data/models/*.stk
 genomes/*/*.fna
 genomes/*/*.fna.gz
