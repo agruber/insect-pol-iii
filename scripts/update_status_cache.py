@@ -39,7 +39,7 @@ def scan_file_status(genomes_dir="genomes"):
             
             # Check for genome and cmsearch results
             genome_file = os.path.join(species_dir, "genome.fna.gz")
-            search_results = os.path.join(species_dir, "cmsearch_results.txt.gz")
+            search_results = os.path.join(species_dir, "snRNAtRNA.tblout.gz")
             
             status_data[species_name] = {
                 'has_genome': os.path.exists(genome_file) and os.path.islink(genome_file),

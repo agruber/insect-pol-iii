@@ -15,6 +15,10 @@ def generate_cmsearch_commands(species_names, models_file, output_dir="genomes",
     valid_species = []
     skipped_species = []
     
+    # Extract model name from models_file for output naming
+    model_basename = os.path.basename(models_file)
+    model_name = os.path.splitext(model_basename)[0]  # Remove .cm extension
+    
     # First pass: check which species have genomes available and haven't been processed
     for species in species_names:
         species = species.strip()
@@ -23,8 +27,8 @@ def generate_cmsearch_commands(species_names, models_file, output_dir="genomes",
             
         species_dir = f"{output_dir}/{species}"
         genome_symlink = f"{species_dir}/genome.fna.gz"
-        cmsearch_output = f"{species_dir}/cmsearch_results.txt"
-        cmsearch_gz = f"{species_dir}/cmsearch_results.txt.gz"
+        cmsearch_output = f"{species_dir}/{model_name}.tblout"
+        cmsearch_gz = f"{species_dir}/{model_name}.tblout.gz"
         
         # Check if genome symlink exists and points to a valid file
         if os.path.islink(genome_symlink) and os.path.exists(genome_symlink):
@@ -54,7 +58,7 @@ def generate_cmsearch_commands(species_names, models_file, output_dir="genomes",
         else:
             temp_fasta = f"{species_dir}/genome.fna"
             
-        cmsearch_output = f"{species_dir}/cmsearch_results.txt"
+        cmsearch_output = f"{species_dir}/{model_name}.tblout"
         species_commands = [
             f"echo 'Processing {species}...'",
             f"gunzip -c '{genome_symlink}' > '{temp_fasta}'",

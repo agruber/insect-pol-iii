@@ -274,7 +274,7 @@ class SpeciesTreeExplorer:
                 species_dir = f"genomes/{species_name}"
                 if os.path.isdir(species_dir):
                     genome_file = f"{species_dir}/genome.fna.gz"
-                    search_results = f"{species_dir}/cmsearch_results.txt.gz"
+                    search_results = f"{species_dir}/snRNAtRNA.tblout.gz"
                     
                     # Check if genome is downloaded
                     has_genome = os.path.exists(genome_file) and os.path.islink(genome_file)
@@ -492,7 +492,7 @@ class SpeciesTreeExplorer:
                 species_name = self.clean_species_name(node.name)
                 species_dir = f"genomes/{species_name}"
                 has_genome = os.path.exists(f"{species_dir}/genome.fna.gz")
-                has_search = os.path.exists(f"{species_dir}/cmsearch_results.txt.gz")
+                has_search = os.path.exists(f"{species_dir}/snRNAtRNA.tblout.gz")
                 
                 status_icons = ""
                 if has_genome:
