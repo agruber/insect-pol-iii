@@ -36,7 +36,7 @@ def parse_cmsearch_line(line):
         'description': ' '.join(fields[17:]) if len(fields) > 17 else ''
     }
 
-def cmsearch_to_gff3_entry(hit, source="cmsearch"):
+def tblout_to_gff3_entry(hit, source="cmsearch"):
     """Convert a cmsearch hit to GFF3 format"""
     
     # Handle coordinates: cmsearch uses 1-based coordinates
@@ -87,68 +87,65 @@ def cmsearch_to_gff3_entry(hit, source="cmsearch"):
     
     return gff3_line
 
-def convert_cmsearch_to_gff3(input_file, output_file, evalue_cutoff=1e-5, source="cmsearch"):
-    """Convert cmsearch results file to GFF3 format"""
+def convert_tblout_to_gff3(evalue_cutoff=1e-5, source="cmsearch"):
+    """Convert cmsearch results from stdin to GFF3 format, writing to stdout"""
     
-    # Determine if input is gzipped
-    if input_file.endswith('.gz'):
-        open_func = gzip.open
-        mode = 'rt'
-    else:
-        open_func = open
-        mode = 'r'
+    # Read from stdin
+    in_fh = sys.stdin
     
-    # Determine output file handle
-    if output_file == '-':
-        out_fh = sys.stdout
-    else:
-        out_fh = open(output_file, 'w')
+    # Always write to stdout
+    out_fh = sys.stdout
     
-    try:
-        with open_func(input_file, mode) as in_fh:
-            # Write GFF3 header
-            out_fh.write("##gff-version 3\n")
-            out_fh.write(f"##date {datetime.now().strftime('%Y-%m-%d')}\n")
-            out_fh.write(f"##source-version cmsearch_to_gff3.py\n")
-            out_fh.write(f"##evalue-cutoff {evalue_cutoff}\n")
-            
-            hits_written = 0
-            hits_filtered = 0
-            
-            for line in in_fh:
-                line = line.strip()
-                
-                # Skip comments and empty lines
-                if line.startswith('#') or not line:
-                    continue
-                
-                # Parse the hit
-                hit = parse_cmsearch_line(line)
-                if hit is None:
-                    continue
-                
-                # Apply E-value filter
-                if hit['evalue'] > evalue_cutoff:
-                    hits_filtered += 1
-                    continue
-                
-                # Convert to GFF3 and write
-                gff3_line = cmsearch_to_gff3_entry(hit, source)
-                out_fh.write(gff3_line + '\n')
-                hits_written += 1
-            
-    finally:
-        if output_file != '-':
-            out_fh.close()
+    # Write GFF3 header
+    out_fh.write("##gff-version 3\n")
+    out_fh.write(f"##date {datetime.now().strftime('%Y-%m-%d')}\n")
+    out_fh.write(f"##source-version tblout_to_gff3.py\n")
+    out_fh.write(f"##evalue-cutoff {evalue_cutoff}\n")
+    
+    hits_written = 0
+    hits_filtered = 0
+    
+    for line in in_fh:
+        line = line.strip()
+        
+        # Skip comments and empty lines
+        if line.startswith('#') or not line:
+            continue
+        
+        # Parse the hit
+        hit = parse_cmsearch_line(line)
+        if hit is None:
+            continue
+        
+        # Apply E-value filter
+        if hit['evalue'] > evalue_cutoff:
+            hits_filtered += 1
+            continue
+        
+        # Convert to GFF3 and write
+        gff3_line = tblout_to_gff3_entry(hit, source)
+        out_fh.write(gff3_line + '\n')
+        hits_written += 1
     
     print(f"Converted {hits_written} hits to GFF3 format", file=sys.stderr)
     print(f"Filtered {hits_filtered} hits with E-value > {evalue_cutoff}", file=sys.stderr)
 
 def main():
-    parser = argparse.ArgumentParser(description='Convert cmsearch results to GFF3 format')
-    parser.add_argument('input_file', help='Input cmsearch results file (can be .gz)')
-    parser.add_argument('-o', '--output', default='-', 
-                       help='Output GFF3 file (default: stdout)')
+    parser = argparse.ArgumentParser(
+        description='Convert cmsearch tabular output to GFF3 format (reads from stdin, outputs to stdout)',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Convert cmsearch tabular output to GFF3
+  zcat results.tblout.gz | python3 tblout_to_gff3.py > hits.gff3
+  
+  # With custom E-value cutoff
+  zcat results.tblout.gz | python3 tblout_to_gff3.py -e 1e-10 > stringent_hits.gff3
+  
+  # In a pipeline (as used in workflow)
+  zcat results.tblout.gz | python3 tblout_to_gff3.py | python3 extract_upstream_regions.py -l genome.tsv
+        """
+    )
     parser.add_argument('-e', '--evalue', type=float, default=1e-5,
                        help='E-value cutoff for filtering hits (default: 1e-5)')
     parser.add_argument('-s', '--source', default='cmsearch',
@@ -157,7 +154,7 @@ def main():
     args = parser.parse_args()
     
     try:
-        convert_cmsearch_to_gff3(args.input_file, args.output, args.evalue, args.source)
+        convert_tblout_to_gff3(args.evalue, args.source)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

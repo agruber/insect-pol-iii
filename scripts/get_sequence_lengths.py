@@ -12,14 +12,15 @@ Output format: sequence_id<tab>length
 """
 
 import sys
-import argparse
-import gzip
-from Bio import SeqIO
+from bioseq_lib import (
+    smart_open, progress_reporter, parse_fasta_from_handle,
+    create_standard_parser, add_io_arguments
+)
 
 def get_sequence_lengths(input_handle, output_handle):
-    """Extract sequence lengths from FASTA input using BioPython"""
+    """Extract sequence lengths from FASTA input"""
     try:
-        sequences = SeqIO.parse(input_handle, 'fasta')
+        sequences = parse_fasta_from_handle(input_handle)
         count = 0
         
         for record in sequences:
@@ -28,8 +29,7 @@ def get_sequence_lengths(input_handle, output_handle):
             output_handle.write(f"{seq_id}\t{length}\n")
             count += 1
             
-            if count % 1000 == 0:
-                print(f"Processed {count} sequences...", file=sys.stderr)
+            progress_reporter(count)
         
         print(f"Total sequences processed: {count}", file=sys.stderr)
         
@@ -38,9 +38,8 @@ def get_sequence_lengths(input_handle, output_handle):
         sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(
+    parser = create_standard_parser(
         description='Extract sequence lengths from FASTA files',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # From gzipped file via pipe
@@ -54,33 +53,20 @@ Examples:
         """
     )
     
-    parser.add_argument('input_file', nargs='?', 
-                       help='Input FASTA file (use stdin if not provided)')
-    parser.add_argument('-o', '--output', 
-                       help='Output file (use stdout if not provided)')
+    add_io_arguments(parser, 
+                    'Input FASTA file', 
+                    'Output TSV file')
     
     args = parser.parse_args()
     
-    # Handle input
-    if args.input_file:
-        if args.input_file.endswith('.gz'):
-            input_handle = gzip.open(args.input_file, 'rt')
-        else:
-            input_handle = open(args.input_file, 'r')
-    else:
-        input_handle = sys.stdin
-    
-    # Handle output
-    if args.output:
-        output_handle = open(args.output, 'w')
-    else:
-        output_handle = sys.stdout
+    # Handle I/O using library functions
+    input_handle = smart_open(args.input, 'r')
+    output_handle = smart_open(args.output, 'w')
     
     try:
         get_sequence_lengths(input_handle, output_handle)
     finally:
-        # Clean up file handles
-        if args.input_file:
+        if args.input:
             input_handle.close()
         if args.output:
             output_handle.close()
