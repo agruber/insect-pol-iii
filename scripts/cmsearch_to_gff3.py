@@ -76,7 +76,7 @@ def cmsearch_to_gff3_entry(hit, source="cmsearch"):
     gff3_line = '\t'.join([
         hit['target_name'],          # seqid
         source,                      # source  
-        'ncRNA',                     # type (assuming ncRNA for covariance models)
+        hit['query_name'],           # type
         str(start),                  # start (1-based)
         str(end),                    # end (1-based)
         str(hit['score']),           # score
@@ -136,9 +136,6 @@ def convert_cmsearch_to_gff3(input_file, output_file, evalue_cutoff=1e-5, source
                 gff3_line = cmsearch_to_gff3_entry(hit, source)
                 out_fh.write(gff3_line + '\n')
                 hits_written += 1
-            
-            # Write summary as comment
-            out_fh.write(f"##summary {hits_written} hits written, {hits_filtered} hits filtered by E-value\n")
             
     finally:
         if output_file != '-':
