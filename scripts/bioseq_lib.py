@@ -341,11 +341,6 @@ def calculate_upstream_region(feature: GFF3Feature, upstream_distance: int,
         return None
     
     # Create upstream feature
-    upstream_attributes = feature.attributes
-    if upstream_attributes and not upstream_attributes.endswith(';'):
-        upstream_attributes += ';'
-    upstream_attributes += f"upstream_of={feature.type};upstream_distance={upstream_distance}"
-    
     return GFF3Feature(
         seqid=feature.seqid,
         source=feature.source,
@@ -353,7 +348,7 @@ def calculate_upstream_region(feature: GFF3Feature, upstream_distance: int,
         start=upstream_start,
         end=upstream_end,
         strand=feature.strand,
-        attributes=upstream_attributes
+        attributes='.'
     )
 
 

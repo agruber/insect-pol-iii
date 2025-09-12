@@ -79,15 +79,15 @@ def tblout_to_gff3_entry(hit, source="cmsearch"):
         hit['query_name'],           # type
         str(start),                  # start (1-based)
         str(end),                    # end (1-based)
-        str(hit['score']),           # score
+        str(hit['evalue']),          # score (using e-value instead of bit score)
         hit['strand'],               # strand
         '.',                         # phase (not applicable for ncRNA)
-        attributes_str               # attributes
+        '.'                          # attributes (removed)
     ])
     
     return gff3_line
 
-def convert_tblout_to_gff3(evalue_cutoff=1e-5, source="cmsearch"):
+def convert_tblout_to_gff3(source="cmsearch"):
     """Convert cmsearch results from stdin to GFF3 format, writing to stdout"""
     
     # Read from stdin
@@ -100,10 +100,8 @@ def convert_tblout_to_gff3(evalue_cutoff=1e-5, source="cmsearch"):
     out_fh.write("##gff-version 3\n")
     out_fh.write(f"##date {datetime.now().strftime('%Y-%m-%d')}\n")
     out_fh.write(f"##source-version tblout_to_gff3.py\n")
-    out_fh.write(f"##evalue-cutoff {evalue_cutoff}\n")
     
     hits_written = 0
-    hits_filtered = 0
     
     for line in in_fh:
         line = line.strip()
@@ -117,18 +115,12 @@ def convert_tblout_to_gff3(evalue_cutoff=1e-5, source="cmsearch"):
         if hit is None:
             continue
         
-        # Apply E-value filter
-        if hit['evalue'] > evalue_cutoff:
-            hits_filtered += 1
-            continue
-        
         # Convert to GFF3 and write
         gff3_line = tblout_to_gff3_entry(hit, source)
         out_fh.write(gff3_line + '\n')
         hits_written += 1
     
     print(f"Converted {hits_written} hits to GFF3 format", file=sys.stderr)
-    print(f"Filtered {hits_filtered} hits with E-value > {evalue_cutoff}", file=sys.stderr)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -139,22 +131,20 @@ Examples:
   # Convert cmsearch tabular output to GFF3
   zcat results.tblout.gz | python3 tblout_to_gff3.py > hits.gff3
   
-  # With custom E-value cutoff
-  zcat results.tblout.gz | python3 tblout_to_gff3.py -e 1e-10 > stringent_hits.gff3
+  # In a pipeline with filtering
+  zcat results.tblout.gz | python3 tblout_to_gff3.py | python3 filter_gff3.py -e 1e-10 > filtered_hits.gff3
   
   # In a pipeline (as used in workflow)
   zcat results.tblout.gz | python3 tblout_to_gff3.py | python3 extract_upstream_regions.py -l genome.tsv
         """
     )
-    parser.add_argument('-e', '--evalue', type=float, default=1e-5,
-                       help='E-value cutoff for filtering hits (default: 1e-5)')
     parser.add_argument('-s', '--source', default='cmsearch',
                        help='Source field for GFF3 (default: cmsearch)')
     
     args = parser.parse_args()
     
     try:
-        convert_tblout_to_gff3(args.evalue, args.source)
+        convert_tblout_to_gff3(args.source)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
