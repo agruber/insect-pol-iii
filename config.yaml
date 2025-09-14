@@ -1,0 +1,103 @@
+# RNA polymerase classification for snRNA genes
+# This configuration file defines which RNA types are transcribed by
+# RNA Polymerase II vs RNA Polymerase III
+
+rna_polymerases:
+  pol2:
+    description: "RNA Polymerase II transcribed snRNAs"
+    types:
+      - U1
+      - U2
+      - U3
+      - U4
+      - U4atac
+      - U5
+      - U7
+      - U11
+      - U12
+      - OrCD1
+  
+  pol3:
+    description: "RNA Polymerase III transcribed snRNAs"
+    types:
+      - noeCR34335
+      - Arthropod_7SK
+      - RNase_MRP
+      - RNaseP_nuc
+      - U6
+      - U6atac
+      - tRNAsec
+
+# Default e-value thresholds for each RNA type
+evalues:
+  Arthropod_7SK: 1e-15
+  OrCD1: 1e-10
+  RNase_MRP: 1e-10
+  RNaseP_nuc: 1e-10
+  U1: 1e-15
+  U2: 1e-15
+  U3: 1e-10
+  U4: 1e-10
+  U4atac: 1e-10
+  U5: 1e-10
+  U6: 1e-10
+  U6atac: 1e-10
+  U7: 1e-5
+  U11: 1e-5
+  U12: 1e-8
+  tRNAsec: 1e-10
+
+# Genes to exclude for specific taxonomic groups
+exclude_genes:
+  Insecta:
+    - RNaseP_nuc
+
+# Default upstream region length in nucleotides
+upstream_length: 100
+
+# Strict mode for upstream extraction (only exact length regions)
+upstream_strict: true
+
+# Similarity threshold for filtering nearly identical sequences (percentage)
+similarity_threshold: 98
+
+# Low complexity filtering thresholds (as fractions: 0.5 = 50%)
+low_complexity:
+  homopolymer: 0.5      # Max fraction for any single nucleotide
+  dinucleotide: 0.75    # Max fraction for any dinucleotide pattern
+  trinucleotide: 0.75   # Max fraction for any trinucleotide pattern
+
+# BLAST query names mapping (filename -> gene name for GFF3)
+blast_queries:
+  noeCR34335: noeCR34335
+
+# Promoter annotation settings by taxonomic group
+# Applied in order from most specific to least specific (species > genus > family > order > class)
+promoter_annotation:
+  # Family-level settings
+  Drosophilidae:
+    kmers:
+      - TTCYCAA
+    promoter_length: 22
+    search_start: -40
+    search_end: -60
+
+  # Can add genus-level settings
+  # Drosophila:
+  #   kmers:
+  #     - TATAAA
+  #   promoter_length: 20
+
+  # Can add species-level settings
+  # Drosophila_melanogaster:
+  #   kmers:
+  #     - TATAWW
+  #   promoter_length: 25
+
+  # Default settings if no taxonomic match found
+  default:
+    kmer_size: 6  # For automatic discovery
+    promoter_length: 20
+    search_start: -40
+    search_end: -60
+    min_coverage: 3

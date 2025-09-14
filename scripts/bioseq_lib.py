@@ -305,7 +305,7 @@ def extract_genomic_sequence(feature: GFF3Feature, sequences: Dict[str, SeqRecor
 
 
 def calculate_upstream_region(feature: GFF3Feature, upstream_distance: int, 
-                            seq_lengths: Dict[str, int]) -> Optional[GFF3Feature]:
+                            seq_lengths: Dict[str, int], strict: bool = False) -> Optional[GFF3Feature]:
     """
     Calculate upstream region coordinates for a feature.
     
@@ -313,6 +313,7 @@ def calculate_upstream_region(feature: GFF3Feature, upstream_distance: int,
         feature: Original GFF3 feature
         upstream_distance: Distance upstream to extract
         seq_lengths: Dictionary of sequence lengths
+        strict: If True, only return regions that are exactly upstream_distance long
         
     Returns:
         New GFF3Feature for upstream region or None if invalid
@@ -338,6 +339,11 @@ def calculate_upstream_region(feature: GFF3Feature, upstream_distance: int,
     
     # Validate region
     if upstream_start > upstream_end or upstream_start < 1 or upstream_end > seq_length:
+        return None
+    
+    # Check strict mode: only return if region is exactly the requested length
+    actual_length = upstream_end - upstream_start + 1
+    if strict and actual_length != upstream_distance:
         return None
     
     # Create upstream feature

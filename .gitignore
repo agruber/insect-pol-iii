@@ -11,3 +11,20 @@ data/models/*.i1p
 data/models/*.stk
 genomes/*/*.fna
 genomes/*/*.fna.gz
+genomes/*/genome.tsv
+genomes/*/logs/
+genomes/*/upstream.fa
+
+# Testing artifacts
+test_*.fa
+test_*.fasta
+test_*.tsv
+test_*.gff3
+*.tmp
+htmlcov/
+.coverage
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+test_report.html
