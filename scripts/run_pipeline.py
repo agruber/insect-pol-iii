@@ -349,7 +349,7 @@ def get_promoter_settings(species_name: str, config: Dict) -> Dict:
 
 def run_annotate_pipeline(species_name: str, config: Dict, input_file: Optional[str] = None,
                          output_file: Optional[str] = None):
-    """Run promoter annotation pipeline using align_promoters.py"""
+    """Run promoter annotation pipeline using align_promoters_v2.py"""
 
     species_dir = Path("genomes") / species_name
 
@@ -400,17 +400,16 @@ def run_annotate_pipeline(species_name: str, config: Dict, input_file: Optional[
         print(f"Error: No promoter annotation settings found for {species_name}", file=sys.stderr)
         sys.exit(1)
 
-    # Build align_promoters.py command - align_promoters.py reads from stdin and writes to stdout
-    cmd_parts = ["cat", str(input_file), "|", "./scripts/align_promoters.py"]
+    # Build align_promoters_v2.py command - align_promoters_v2.py reads from stdin and writes to stdout
+    cmd_parts = ["cat", str(input_file), "|", "./scripts/align_promoters_v2.py"]
 
-    # Add specific kmers if specified
+    # Add specific kmers if specified (required parameter)
     if 'kmers' in settings:
-        for kmer in settings['kmers']:
-            cmd_parts.extend(["--kmer", kmer])
-
-    # Add kmer size if specified
-    if 'kmer_size' in settings:
-        cmd_parts.extend(["-k", str(settings['kmer_size'])])
+        kmer_list = ','.join(settings['kmers'])
+        cmd_parts.extend(["--kmer", kmer_list])
+    else:
+        # Default k-mer for insects if not specified
+        cmd_parts.extend(["--kmer", "TTCYCAA"])
 
     # Add promoter length if specified
     if 'promoter_length' in settings:
@@ -422,9 +421,9 @@ def run_annotate_pipeline(species_name: str, config: Dict, input_file: Optional[
     if 'search_end' in settings:
         cmd_parts.extend(["-e", str(settings['search_end'])])
 
-    # Add other settings
-    if 'min_coverage' in settings:
-        cmd_parts.extend(["-m", str(settings['min_coverage'])])
+    # Add promoter shift if specified
+    if 'promoter_shift' in settings:
+        cmd_parts.extend(["-ps", str(settings['promoter_shift'])])
 
     # Add output redirection
     cmd_parts.extend([">", str(output_file)])

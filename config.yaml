@@ -78,9 +78,6 @@ promoter_annotation:
   Drosophilidae:
     kmers:
       - TTCYCAA
-    promoter_length: 22
-    search_start: -40
-    search_end: -60
 
   # Can add genus-level settings
   # Drosophila:
@@ -96,8 +93,6 @@ promoter_annotation:
 
   # Default settings if no taxonomic match found
   default:
-    kmer_size: 6  # For automatic discovery
     promoter_length: 20
-    search_start: -40
-    search_end: -60
-    min_coverage: 3
+    search_start: -45
+    search_end: -70
