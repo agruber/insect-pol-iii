@@ -540,14 +540,14 @@ def main():
                             best_score = max_score
                             best_anchor = (pos, kmer)
 
-            # Only include if score > 0.8
-            if best_score > 0.8:
+            # Only include if score >= 0.8 (rounded to match display precision)
+            if round(best_score, 2) >= 0.8:
                 best_hd1_anchors[seq_idx] = (best_anchor[0], best_anchor[1], best_score)
                 anchor_data[seq_idx] = best_anchor
                 relative_pos = best_anchor[0] - len(seq)
-                sys.stderr.write(f"  {record.id}: {best_anchor[1]}@{relative_pos} (score: {best_score:.3f})\n")
+                sys.stderr.write(f"  {record.id}: {best_anchor[1]}@{relative_pos} (score: {best_score:.2f})\n")
             else:
-                sys.stderr.write(f"  {record.id}: no HD1 k-mer with score > 0.8 (best: {best_score:.3f})\n")
+                sys.stderr.write(f"  {record.id}: no HD1 k-mer with score >= 0.8 (best: {best_score:.2f})\n")
 
         # Re-align sequences with new anchors
         aligned_sequences = align_sequences_by_anchors(sequences, anchor_data)
@@ -657,7 +657,7 @@ def main():
                 seq_type = classify_sequence(record.id, config)
 
                 # Log scores
-                sys.stderr.write(f"{record.id:<60} {seq_type:<8} {pol2_score:<8.3f} {pol3_score:<8.3f}\n")
+                sys.stderr.write(f"{record.id:<60} {seq_type:<8} {pol2_score:<8.2f} {pol3_score:<8.2f}\n")
 
             # Add to anchored outputs
             header = f">{record.id}"

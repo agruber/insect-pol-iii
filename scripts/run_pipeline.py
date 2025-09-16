@@ -331,8 +331,8 @@ def get_promoter_settings(species_name: str, config: Dict) -> Dict:
     # Get full taxonomy for the species
     taxonomy = get_full_taxonomy(species_name)
 
-    # Check taxonomy levels in order of specificity (species -> genus -> family -> order -> class)
-    taxonomy_levels = ['species', 'genus', 'family', 'order', 'class']
+    # Check taxonomy levels in order of specificity (species -> genus -> family -> order -> suborder -> infraorder -> class)
+    taxonomy_levels = ['species', 'genus', 'family', 'order', 'suborder', 'infraorder', 'class']
 
     for level in taxonomy_levels:
         taxon = taxonomy.get(level)
@@ -439,7 +439,7 @@ def run_annotate_pipeline(species_name: str, config: Dict, input_file: Optional[
     # Show applied settings
     taxonomy = get_full_taxonomy(species_name)
     applied_taxon = None
-    for level in ['species', 'genus', 'family', 'order', 'class']:
+    for level in ['species', 'genus', 'family', 'order', 'suborder', 'infraorder', 'class']:
         taxon = taxonomy.get(level)
         if taxon and taxon in config.get('promoter_annotation', {}):
             applied_taxon = f"{level}: {taxon}"
@@ -553,6 +553,36 @@ def run_screen_pipeline(species_name: str, config: Dict, cutoff_strategy: str = 
     print(f"  Predictions: {output_file}", file=sys.stderr)
     print(f"  Summary: {summary_file}", file=sys.stderr)
 
+def run_promoter_pipeline(species_name: str, config: Dict, input_file: Optional[str] = None):
+    """Run promoter consensus analysis pipeline"""
+
+    species_dir = Path("genomes") / species_name
+
+    # Determine input file
+    if input_file is None:
+        input_file = species_dir / "annotated.fa"
+
+    # Check if input file exists
+    if not Path(input_file).exists():
+        print(f"Error: Input file '{input_file}' not found", file=sys.stderr)
+        print(f"  Run 'annotate' command first to create aligned sequences", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Analyzing promoter consensus for {species_name}...", file=sys.stderr)
+    print(f"  Input: {input_file}", file=sys.stderr)
+
+    # Run promoter analysis - output goes directly to stdout
+    analysis_cmd = f"python3 ./scripts/analyze_promoter_consensus.py {input_file}"
+
+    try:
+        result = subprocess.run(analysis_cmd, shell=True, capture_output=False, text=True)
+        if result.returncode != 0:
+            print(f"Error: Promoter analysis failed with exit code {result.returncode}", file=sys.stderr)
+            sys.exit(1)
+    except Exception as e:
+        print(f"Error running promoter analysis: {e}", file=sys.stderr)
+        sys.exit(1)
+
 def run_status_pipeline(config: Dict, show_taxonomy: bool = False, show_rare: bool = False,
                         taxonomy_level: str = 'all', species_filter: Optional[str] = None):
     """Run status analysis showing data collection progress"""
@@ -620,12 +650,24 @@ Commands:
   upstream    Extract upstream regions and generate FASTA file
   filter      Apply filtering to tblout or GFF3 files
   annotate    Annotate promoter regions using taxonomic-specific settings
+  promoter    Analyze promoter consensus and Pol II/III differences
   screen      Screen genome for promoters using MATCH algorithm
   status      Show data collection status and ncRNA distribution
+
+Combined Commands (use + to chain):
+  upstream+annotate    Extract upstream regions then annotate promoters
+  upstream+annotate+promoter   Extract, annotate, and analyze promoter consensus
+  upstream+annotate+screen    Complete pipeline from extraction to screening
 
 Examples:
   # Extract upstream regions for Drosophila melanogaster
   python3 run_pipeline.py upstream Drosophila_melanogaster
+
+  # Extract and annotate in one command
+  python3 run_pipeline.py upstream+annotate Drosophila_melanogaster
+
+  # Complete pipeline from extraction to screening
+  python3 run_pipeline.py upstream+annotate+screen Drosophila_melanogaster
 
   # Extract with custom upstream distance
   python3 run_pipeline.py upstream Drosophila_melanogaster -u 200
@@ -638,6 +680,9 @@ Examples:
 
   # Annotate promoter regions (uses upstream.fa as input)
   python3 run_pipeline.py annotate Drosophila_melanogaster
+
+  # Analyze promoter consensus (uses annotated.fa as input)
+  python3 run_pipeline.py promoter Drosophila_melanogaster
 
   # Screen genome for promoters (requires annotated.fa)
   python3 run_pipeline.py screen Drosophila_melanogaster
@@ -662,8 +707,8 @@ The pipeline will:
         """
     )
 
-    parser.add_argument('command', choices=['upstream', 'filter', 'annotate', 'screen', 'status'],
-                       help='Pipeline command to execute')
+    parser.add_argument('command',
+                       help='Pipeline command to execute (single: upstream, filter, annotate, screen, status; or combined: upstream+annotate, upstream+annotate+screen)')
     parser.add_argument('species', nargs='?',
                        help='Species name (must match directory in genomes/)')
     parser.add_argument('-c', '--config', default='config.yaml',
@@ -691,61 +736,90 @@ The pipeline will:
 
     args = parser.parse_args()
 
+    # Parse command - handle combined commands with '+'
+    commands = args.command.split('+')
+    valid_commands = ['upstream', 'filter', 'annotate', 'promoter', 'screen', 'status']
+
+    # Validate all commands
+    for cmd in commands:
+        if cmd not in valid_commands:
+            print(f"Error: Invalid command '{cmd}'. Valid commands: {', '.join(valid_commands)}", file=sys.stderr)
+            sys.exit(1)
+
     # Load configuration
     config = load_config(args.config)
 
     # For status command, species is optional
-    if args.command != 'status' and not args.species:
+    if 'status' not in commands and not args.species:
         print("Error: Species name is required for this command", file=sys.stderr)
         sys.exit(1)
 
     # Check if species directory exists (except for status command)
-    if args.command != 'status':
+    if 'status' not in commands:
         species_dir = Path("genomes") / args.species
         if not species_dir.exists():
             print(f"Error: Species directory '{species_dir}' not found", file=sys.stderr)
             sys.exit(1)
-    
-    # Execute appropriate command
-    if args.command == 'upstream':
-        run_upstream_pipeline(
-            args.species,
-            config,
-            upstream_distance=args.upstream,
-            default_evalue=args.evalue,
-            output_file=args.output
-        )
-    elif args.command == 'filter':
-        run_filter_pipeline(
-            args.species,
-            config,
-            input_file=args.input,
-            output_file=args.output,
-            default_evalue=args.evalue
-        )
-    elif args.command == 'annotate':
-        run_annotate_pipeline(
-            args.species,
-            config,
-            input_file=args.input,
-            output_file=args.output
-        )
-    elif args.command == 'screen':
-        run_screen_pipeline(
-            args.species,
-            config,
-            cutoff_strategy=args.cutoff_strategy,
-            min_score=args.min_score,
-            output_file=args.output
-        )
-    elif args.command == 'status':
-        run_status_pipeline(
-            config,
-            show_taxonomy=args.taxonomy,
-            show_rare=args.rare,
-            taxonomy_level=args.level,
-            species_filter=args.species
-        )
+
+    # Execute commands in sequence
+    print(f"Executing pipeline: {' -> '.join(commands)}", file=sys.stderr)
+
+    for i, command in enumerate(commands):
+        if len(commands) > 1:
+            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"STEP {i+1}/{len(commands)}: {command.upper()}", file=sys.stderr)
+            print(f"{'='*60}", file=sys.stderr)
+
+        if command == 'upstream':
+            run_upstream_pipeline(
+                args.species,
+                config,
+                upstream_distance=args.upstream,
+                default_evalue=args.evalue,
+                output_file=args.output
+            )
+        elif command == 'filter':
+            run_filter_pipeline(
+                args.species,
+                config,
+                input_file=args.input,
+                output_file=args.output,
+                default_evalue=args.evalue
+            )
+        elif command == 'annotate':
+            run_annotate_pipeline(
+                args.species,
+                config,
+                input_file=args.input,
+                output_file=args.output
+            )
+        elif command == 'promoter':
+            run_promoter_pipeline(
+                args.species,
+                config,
+                input_file=args.input
+            )
+        elif command == 'screen':
+            run_screen_pipeline(
+                args.species,
+                config,
+                cutoff_strategy=args.cutoff_strategy,
+                min_score=args.min_score,
+                output_file=args.output
+            )
+        elif command == 'status':
+            run_status_pipeline(
+                config,
+                show_taxonomy=args.taxonomy,
+                show_rare=args.rare,
+                taxonomy_level=args.level,
+                species_filter=args.species
+            )
+
+    if len(commands) > 1:
+        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"PIPELINE COMPLETE: All {len(commands)} steps finished successfully!", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
 
 if __name__ == "__main__":
     main()
