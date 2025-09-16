@@ -45,9 +45,9 @@ evalues:
   U6atac: 1e-10
   U7: 1e-5
   U11: 1e-5
-  U12: 1e-8
+  U12: 1e-5
   tRNAsec: 1e-10
-  snoRNAMe18SA1806: 1e+5
+  snoRNAMe18SA1806: 1e-5
 
 # Genes to exclude for specific taxonomic groups
 exclude_genes:
