@@ -91,6 +91,16 @@ promoter_annotation:
   Drosophilidae:
     kmers:
       - TTCYCAA
+    promoter_length: 22
+    promoter_start: 5
+
+  Nematocera:
+    kmers:
+      - ATCRCTA
+
+  Hymenoptera:
+    kmers:
+      - TTCTCRC
 
   # Can add genus-level settings
   # Drosophila:
@@ -107,5 +117,6 @@ promoter_annotation:
   # Default settings if no taxonomic match found
   default:
     promoter_length: 20
+    promoter_start: 3
     search_start: -45
     search_end: -70

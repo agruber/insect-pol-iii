@@ -421,9 +421,9 @@ def run_annotate_pipeline(species_name: str, config: Dict, input_file: Optional[
     if 'search_end' in settings:
         cmd_parts.extend(["-e", str(settings['search_end'])])
 
-    # Add promoter shift if specified
-    if 'promoter_shift' in settings:
-        cmd_parts.extend(["-ps", str(settings['promoter_shift'])])
+    # Add promoter start if specified
+    if 'promoter_start' in settings:
+        cmd_parts.extend(["-ps", str(settings['promoter_start'])])
 
     # Add output redirection
     cmd_parts.extend([">", str(output_file)])
@@ -583,6 +583,83 @@ def run_promoter_pipeline(species_name: str, config: Dict, input_file: Optional[
         print(f"Error running promoter analysis: {e}", file=sys.stderr)
         sys.exit(1)
 
+def run_promoterwindow_pipeline(species_name: str, config: Dict, input_file: Optional[str] = None, eval_mode: bool = False):
+    """Run optimal promoter window analysis pipeline"""
+    species_dir = Path("genomes") / species_name
+
+    # Step 1: Generate core motif alignment with fixed window
+    print("Step 1: Generating core motif alignment...", file=sys.stderr)
+
+    # Get promoter settings for this species
+    settings = get_promoter_settings(species_name, config)
+
+    if not settings or 'kmers' not in settings or not settings['kmers']:
+        print(f"Error: No k-mers found for {species_name}", file=sys.stderr)
+        sys.exit(1)
+
+    # Use the first k-mer from the settings
+    kmer = settings['kmers'][0]
+    kmer_length = len(kmer)
+    print(f"Using k-mer: {kmer} (length: {kmer_length})", file=sys.stderr)
+
+    # Run annotate pipeline with regular parameters to get proper promoter windows
+    temp_annotated = species_dir / "annotated_for_window.fa"
+
+    # Use all settings from the promoter configuration
+    annotate_cmd = [
+        "python3", "scripts/align_promoters_v2.py",
+        "--kmer", kmer,
+        "-l", str(settings.get('promoter_length', 20)),  # Use configured promoter length
+        "-ps", str(settings.get('promoter_start', 3)),   # Use configured promoter start
+        "-s", "-40", "-e", "-60"
+        # Removed -v for verbose output
+    ]
+
+    print(f"Running: {' '.join(annotate_cmd)} < {species_dir / 'upstream.fa'}", file=sys.stderr)
+    print(f"  Using promoter length: {settings.get('promoter_length', 20)}, start: {settings.get('promoter_start', 3)}", file=sys.stderr)
+
+    with open(species_dir / "upstream.fa", 'r') as input_f:
+        with open(temp_annotated, 'w') as output_f:
+            with open(os.devnull, 'w') as devnull:
+                result = subprocess.run(annotate_cmd, stdin=input_f, stdout=output_f, stderr=devnull, text=True)
+
+    if result.returncode != 0:
+        print(f"Error in alignment step", file=sys.stderr)
+        sys.exit(1)
+
+    # Step 2: Analyze optimal window
+    if eval_mode:
+        print("Step 2: Evaluating multiple thresholds...", file=sys.stderr)
+    else:
+        print("Step 2: Analyzing optimal promoter window...", file=sys.stderr)
+
+    output_file = species_dir / "promoter_window_analysis.yaml"
+
+    window_cmd = [
+        "python3", "scripts/find_optimal_promoter_window.py",
+        str(temp_annotated),
+        "--kmer", kmer,
+        "-c", "config.yaml"
+    ]
+
+    if eval_mode:
+        window_cmd.append("--eval")
+    else:
+        window_cmd.append("--verbose")
+
+    print(f"Running: {' '.join(window_cmd)}", file=sys.stderr)
+    result = subprocess.run(window_cmd)
+
+    if result.returncode != 0:
+        print("Error in window analysis", file=sys.stderr)
+        sys.exit(1)
+
+    # Clean up temporary file
+    temp_annotated.unlink(missing_ok=True)
+    # print(f"Temporary alignment file kept at: {temp_annotated}", file=sys.stderr)  # For debugging
+
+    print(f"Promoter window analysis completed.", file=sys.stderr)
+
 def run_status_pipeline(config: Dict, show_taxonomy: bool = False, show_rare: bool = False,
                         taxonomy_level: str = 'all', species_filter: Optional[str] = None):
     """Run status analysis showing data collection progress"""
@@ -651,6 +728,7 @@ Commands:
   filter      Apply filtering to tblout or GFF3 files
   annotate    Annotate promoter regions using taxonomic-specific settings
   promoter    Analyze promoter consensus and Pol II/III differences
+  promoterwindow  Find optimal promoter window length based on conservation
   screen      Screen genome for promoters using MATCH algorithm
   status      Show data collection status and ncRNA distribution
 
@@ -733,12 +811,14 @@ The pipeline will:
                        help='MATCH cutoff strategy (for screen command, default: minSum)')
     parser.add_argument('--min-score', type=float, default=0.8,
                        help='Minimum score for promoter predictions (for screen command, default: 0.8)')
+    parser.add_argument('--eval', action='store_true',
+                       help='Evaluate multiple thresholds for promoterwindow command')
 
     args = parser.parse_args()
 
     # Parse command - handle combined commands with '+'
     commands = args.command.split('+')
-    valid_commands = ['upstream', 'filter', 'annotate', 'promoter', 'screen', 'status']
+    valid_commands = ['upstream', 'filter', 'annotate', 'promoter', 'promoterwindow', 'screen', 'status']
 
     # Validate all commands
     for cmd in commands:
@@ -798,6 +878,13 @@ The pipeline will:
                 args.species,
                 config,
                 input_file=args.input
+            )
+        elif command == 'promoterwindow':
+            run_promoterwindow_pipeline(
+                args.species,
+                config,
+                input_file=args.input,
+                eval_mode=args.eval
             )
         elif command == 'screen':
             run_screen_pipeline(
