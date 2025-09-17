@@ -932,171 +932,103 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
 
     print(f"  Wrote {len(upstream_with_promoters)} upstream sequences with promoters to {upstream_output}", file=sys.stderr)
 
-    # Step 6: Build Pol II and Pol III PWMs and score noeCR34335 promoters
-    print(f"\n  Building PWMs for scoring...", file=sys.stderr)
+    # Score noeCR34335 promoters using new PWM scoring script
+    score_output = results_dir / "upstream.score"
+    print(f"  Scoring noeCR34335 promoters...", file=sys.stderr)
 
-    # Load polymerase classifications from config
-    import yaml
-    try:
-        with open('config.yaml', 'r') as f:
-            config = yaml.safe_load(f)
-        pol2_types = config['rna_polymerases']['pol2']['types']
-        pol3_types = config['rna_polymerases']['pol3']['types']
-        print(f"  Pol II types: {pol2_types}", file=sys.stderr)
-        print(f"  Pol III types: {pol3_types}", file=sys.stderr)
-    except:
-        print(f"  Warning: Could not load config.yaml, using default classifications", file=sys.stderr)
-        pol2_types = ['U1', 'U2', 'U3', 'U4', 'U4atac', 'U5', 'U7', 'U11', 'U12', 'OrCD1']
-        pol3_types = ['Arthropod_7SK', 'RNase_MRP', 'RNaseP_nuc', 'U6', 'U6atac', 'tRNAsec', 'snoRNAMe18SA1806']
+    # Use the new PWM scoring pipeline command
+    pwm_result = subprocess.run(f"cat {upstream_output} | ./scripts/score_sequences_with_pwm.py -e noeCR34335 -c config.yaml",
+                               shell=True, capture_output=True, text=True)
 
-    # Create separate files for Pol II and Pol III sequences
-    pol2_file = tempfile.mktemp(suffix='_pol2.fa')
-    pol3_file = tempfile.mktemp(suffix='_pol3.fa')
-    noecr_promoters = []
-
-    pol2_count = 0
-    pol3_count = 0
-    pol2_sequences = []
-    pol3_sequences = []
-
-    with open(pol2_file, 'w') as pol2_f, open(pol3_file, 'w') as pol3_f:
-        for record in upstream_with_promoters:
-            if "noeCR34335" in record.id:
-                # Extract noeCR34335 promoter sequence for scoring
-                seq_str = str(record.seq)
-                promoter_match = re.search(r'[ACGT]{15,25}', seq_str)
-                if promoter_match:
-                    promoter_seq = promoter_match.group(0)
-                    # Get the new ID for this sequence
-                    parts = record.id.split('|')
-                    if len(parts) >= 6:
-                        chrom = parts[2]
-                        start = int(parts[3])
-                        end = int(parts[4])
-                        strand = parts[5]
-                        new_id = coord_to_id.get((chrom, start, end, strand), parts[0])
-                        noecr_promoters.append((new_id, promoter_seq))
-            else:
-                # Classify into Pol II or Pol III based on gene type (excluding noeCR34335)
-                gene_type = record.id.split('|')[1] if '|' in record.id else record.id.split('-')[1] if '-' in record.id else "unknown"
-
-                # Extract uppercase nucleotides (the actual promoter sequence)
-                promoter_seq = ''.join([c for c in str(record.seq) if c.isupper()])
-
-                if gene_type in pol2_types:
-                    pol2_f.write(f">{record.id}\n")
-                    pol2_f.write(f"{str(record.seq)}\n")
-                    pol2_sequences.append((gene_type, promoter_seq))
-                    pol2_count += 1
-                elif gene_type in pol3_types and gene_type != 'noeCR34335':
-                    pol3_f.write(f">{record.id}\n")
-                    pol3_f.write(f"{str(record.seq)}\n")
-                    pol3_sequences.append((gene_type, promoter_seq))
-                    pol3_count += 1
-
-    print(f"  Found {len(noecr_promoters)} noeCR34335 sequences to score:", file=sys.stderr)
-    for seq_id, seq in noecr_promoters:
-        print(f"    {seq_id}: {seq}", file=sys.stderr)
-
-    print(f"  Found {pol2_count} Pol II sequences and {pol3_count} Pol III sequences for PWM building", file=sys.stderr)
-
-    if pol2_sequences:
-        print(f"  Pol II PWM sequences ({len(pol2_sequences)} sequences):", file=sys.stderr)
-        for gene_type, seq in pol2_sequences:
-            print(f"    {gene_type}: {seq}", file=sys.stderr)
-
-    if pol3_sequences:
-        print(f"  Pol III PWM sequences ({len(pol3_sequences)} sequences, excluding noeCR34335):", file=sys.stderr)
-        for gene_type, seq in pol3_sequences:
-            print(f"    {gene_type}: {seq}", file=sys.stderr)
-
-    # Build PWMs if we have enough sequences
-    pwm_prefix = results_dir / "background_pwm"
-    pwms_built = True
-
-    if pol2_count >= 2:
-        print(f"  Building Pol II PWM from {pol2_count} sequences...", file=sys.stderr)
-        build_pol2_cmd = f"./scripts/build_pwm_from_alignment.py {pol2_file} -o {pwm_prefix}_pol2"
-        result = subprocess.run(build_pol2_cmd, shell=True, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"  Warning: Pol II PWM building failed: {result.stderr}", file=sys.stderr)
-            pwms_built = False
+    if pwm_result.returncode != 0:
+        print(f"  Warning: PWM scoring failed: {pwm_result.stderr}", file=sys.stderr)
+        result = pwm_result
     else:
-        print(f"  Warning: Insufficient Pol II sequences ({pol2_count}) for PWM building", file=sys.stderr)
-        pwms_built = False
+        # Extract noeCR34335 lines and filter by Pol III score >= 0.7
+        filtered_ids = set()  # Track IDs that pass the filter
+        pol3_threshold = 0.7
 
-    if pol3_count >= 2:
-        print(f"  Building Pol III PWM from {pol3_count} sequences (excluding noeCR34335)...", file=sys.stderr)
-        build_pol3_cmd = f"./scripts/build_pwm_from_alignment.py {pol3_file} -o {pwm_prefix}_pol3"
-        result = subprocess.run(build_pol3_cmd, shell=True, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"  Warning: Pol III PWM building failed: {result.stderr}", file=sys.stderr)
-            pwms_built = False
+        with open(score_output, 'w') as f:
+            f.write("ID\tSequence\tPol2_Score\tPol3_Score\n")
+
+            for line in pwm_result.stdout.strip().split('\n'):
+                if 'noeCR34335' in line and '\t' in line:
+                    parts = line.split('\t')
+                    if len(parts) >= 3:
+                        full_seq_id = parts[0]
+                        pol2_score = parts[1]
+                        pol3_score = parts[2]
+
+                        # Check if Pol III score meets threshold
+                        try:
+                            pol3_value = float(pol3_score)
+                            if pol3_value < pol3_threshold:
+                                print(f"    Filtering out {full_seq_id}: Pol III score {pol3_score} < {pol3_threshold}", file=sys.stderr)
+                                continue  # Skip this sequence
+                        except ValueError:
+                            print(f"    Warning: Invalid Pol III score '{pol3_score}' for {full_seq_id}", file=sys.stderr)
+                            continue
+
+                        # Extract just the short ID for the output
+                        seq_id = full_seq_id.split('|')[0]
+                        filtered_ids.add(seq_id)
+
+                        # Extract uppercase sequence from original file using full ID
+                        seq_cmd = f"grep -A1 '^>{full_seq_id}$' {upstream_output} | tail -1 | tr -d 'a-z-'"
+                        seq_result = subprocess.run(seq_cmd, shell=True, capture_output=True, text=True)
+                        sequence = seq_result.stdout.strip() if seq_result.returncode == 0 else ""
+
+                        f.write(f"{seq_id}\t{sequence}\t{pol2_score}\t{pol3_score}\n")
+
+        # Filter lncrna.fa and upstream.fa to remove noeCR34335 sequences with low Pol III scores
+        print(f"  Filtering FASTA files to remove noeCR34335 sequences with Pol III score < {pol3_threshold}", file=sys.stderr)
+
+        # Filter lncrna.fa (only remove low-scoring noeCR34335 sequences)
+        from Bio import SeqIO
+        temp_lncrna = output_file.with_suffix('.temp.fa')
+        with open(temp_lncrna, 'w') as out_f:
+            for record in SeqIO.parse(output_file, 'fasta'):
+                seq_id = record.id.split('|')[0]
+                # Keep sequence if it's noeCR34335 and passed filter, or if it's not noeCR34335
+                if 'noeCR34335' in record.id:
+                    if seq_id in filtered_ids:  # Only keep noeCR34335 that passed filter
+                        SeqIO.write(record, out_f, 'fasta')
+                else:
+                    # This shouldn't happen in lncrna.fa, but keep for safety
+                    SeqIO.write(record, out_f, 'fasta')
+
+        # Replace original with filtered version
+        os.rename(temp_lncrna, output_file)
+
+        # Filter upstream.fa (keep all non-noeCR34335, only filter noeCR34335 by score)
+        temp_upstream = upstream_output.with_suffix('.temp.fa')
+        with open(temp_upstream, 'w') as out_f:
+            for record in SeqIO.parse(upstream_output, 'fasta'):
+                seq_id = record.id.split('|')[0]
+                # Keep all non-noeCR34335 sequences, and only noeCR34335 that passed filter
+                if 'noeCR34335' in record.id:
+                    if seq_id in filtered_ids:  # Only keep noeCR34335 that passed filter
+                        SeqIO.write(record, out_f, 'fasta')
+                else:
+                    # Keep all other ncRNA types (U1, U2, U6, etc.)
+                    SeqIO.write(record, out_f, 'fasta')
+
+        # Replace original with filtered version
+        os.rename(temp_upstream, upstream_output)
+
+        print(f"  Kept {len(filtered_ids)} noeCR34335 sequences and all other ncRNA types", file=sys.stderr)
+
+        result = type('obj', (object,), {'returncode': 0, 'stderr': ''})()
+
+    if result.returncode != 0:
+        print(f"  Warning: PWM scoring failed: {result.stderr}", file=sys.stderr)
     else:
-        print(f"  Warning: Insufficient Pol III sequences ({pol3_count}) for PWM building", file=sys.stderr)
-        pwms_built = False
-
-    if pwms_built and noecr_promoters:
-        print(f"  Built background PWMs", file=sys.stderr)
-
-        # Score noeCR34335 promoters
-        score_output = results_dir / "upstream.score"
-        print(f"  Scoring noeCR34335 promoters...", file=sys.stderr)
-
-        with open(score_output, 'w') as score_f:
-            # Write header
-            score_f.write("ID\tSequence\tPol2_Score\tPol3_Score\n")
-
-            pol2_pwm = f"{pwm_prefix}_pol2_pol2.json"
-            pol3_pwm = f"{pwm_prefix}_pol3_pol3.json"
-
-            for seq_id, promoter_seq in noecr_promoters:
-                pol2_score = pol3_score = "NA"
-
-                # Score against Pol II PWM
-                if os.path.exists(pol2_pwm):
-                    pol2_cmd = f"echo '>{seq_id}\\n{promoter_seq}' | python3 ./scripts/score_sequences_with_pwm.py {pol2_pwm}"
-                    pol2_result = subprocess.run(pol2_cmd, shell=True, capture_output=True, text=True)
-                    if pol2_result.returncode == 0 and pol2_result.stdout.strip():
-                        lines = pol2_result.stdout.strip().split('\n')
-                        for line in lines:
-                            if '\t' in line:
-                                parts = line.split('\t')
-                                if len(parts) >= 2:
-                                    try:
-                                        pol2_score = f"{float(parts[1]):.2f}"
-                                        break
-                                    except:
-                                        pass
-
-                # Score against Pol III PWM
-                if os.path.exists(pol3_pwm):
-                    pol3_cmd = f"echo '>{seq_id}\\n{promoter_seq}' | python3 ./scripts/score_sequences_with_pwm.py {pol3_pwm}"
-                    pol3_result = subprocess.run(pol3_cmd, shell=True, capture_output=True, text=True)
-                    if pol3_result.returncode == 0 and pol3_result.stdout.strip():
-                        lines = pol3_result.stdout.strip().split('\n')
-                        for line in lines:
-                            if '\t' in line:
-                                parts = line.split('\t')
-                                if len(parts) >= 2:
-                                    try:
-                                        pol3_score = f"{float(parts[1]):.2f}"
-                                        break
-                                    except:
-                                        pass
-
-                score_f.write(f"{seq_id}\t{promoter_seq}\t{pol2_score}\t{pol3_score}\n")
-
-            print(f"  Wrote promoter scores to {score_output}", file=sys.stderr)
-    else:
-        print(f"  Skipping scoring due to PWM building issues", file=sys.stderr)
+        print(f"  Wrote promoter scores to {score_output}", file=sys.stderr)
 
     # Clean up temporary files
     try:
         os.unlink(temp_gff)
         os.unlink(filtered_gff)
-        os.unlink(pol2_file)
-        os.unlink(pol3_file)
     except:
         pass
 
