@@ -1142,7 +1142,23 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
         # Create empty file if lncrna.fa doesn't exist
         identities_file.touch()
 
-    # Step 9: Generate HTML and PDF reports
+    # Step 9: Calculate sequence statistics
+    stats_file = results_dir / "lncrna.stats"
+    if output_file.exists():
+        print(f"\n  Calculating sequence statistics...", file=sys.stderr)
+        stats_cmd = f"./scripts/calculate_lncrna_stats.py {output_file} -o {stats_file}"
+        result = subprocess.run(stats_cmd, shell=True, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"  Warning: Statistics calculation failed: {result.stderr}", file=sys.stderr)
+            # Create empty file to avoid errors later
+            stats_file.touch()
+        else:
+            print(f"  Sequence statistics written to {stats_file}", file=sys.stderr)
+    else:
+        # Create empty file if lncrna.fa doesn't exist
+        stats_file.touch()
+
+    # Step 10: Generate HTML and PDF reports
     print(f"\n  Generating HTML and PDF reports...", file=sys.stderr)
 
     html_file = results_dir / "lncrna.html"
@@ -1157,31 +1173,187 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
     with open(html_file, 'w') as f:
         # HTML header with styles
         f.write("""<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<style>
-@page { size: A4 portrait; margin: 1em; }
-body { font-family: Arial, Helvetica, sans-serif; }
-.alignment { line-height: 1.0; margin: 0; padding: 0; }
-.label-green {
-    display: inline-block; padding: 1px 1px; background-color: #4CAF50;
-    color: white; font-size: 8px; border-radius: 2px;
-    font-family: Arial, sans-serif; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    font-weight: bold;
-}
-.label-yellow {
-    display: inline-block; padding: 1px 1px; background-color: #FFA500;
-    color: white; font-size: 8px; border-radius: 2px;
-    font-family: Arial, sans-serif; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    font-weight: bold;
-}
-.label-red {
-    display: inline-block; padding: 1px 1px; background-color: red;
-    color: white; font-size: 8px; border-radius: 2px;
-    font-family: Arial, sans-serif; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    font-weight: bold;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>lncRNA Analysis</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 1.5cm;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', 'Helvetica', sans-serif;
+            font-size: 9pt;
+            line-height: 1.3;
+            color: #000;
+            background: white;
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 10px;
+        }
+
+        /* Compact headers */
+        h1 {
+            font-size: 12pt;
+            font-weight: bold;
+            margin-bottom: 4px;
+            font-style: italic;
+            border-bottom: 1px solid #333;
+            padding-bottom: 2px;
+        }
+
+        h2 {
+            font-size: 10pt;
+            font-weight: bold;
+            margin-top: 8px;
+            margin-bottom: 4px;
+            color: #222;
+        }
+
+        /* Assembly info - inline */
+        .assembly-info {
+            font-size: 8pt;
+            margin-bottom: 8px;
+            color: #444;
+        }
+
+        /* Taxonomic lineage */
+        .taxonomic-lineage {
+            font-size: 8pt;
+            margin-bottom: 6px;
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Compact sequence container */
+        .sequence-entry {
+            border: 1px solid #ccc;
+            padding: 4px 6px;
+            margin: 6px 0;
+            background: #fafafa;
+        }
+
+        /* Sequence header - single line */
+        .sequence-header {
+            font-size: 8pt;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        /* Inline metadata */
+        .sequence-metadata {
+            font-size: 7pt;
+            color: #666;
+            margin-bottom: 3px;
+            line-height: 1.4;
+        }
+
+        .metadata-item {
+            display: inline-block;
+            margin-right: 8px;
+            white-space: nowrap;
+        }
+
+        /* Compact score labels */
+        .score {
+            display: inline;
+            padding: 0 2px;
+            font-weight: bold;
+            border-radius: 2px;
+        }
+
+        .score-high {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .score-medium {
+            background-color: #ffc107;
+            color: #333;
+        }
+
+        .score-low {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .status-ok {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        /* Sequence display */
+        .sequence {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 5pt;
+            letter-spacing: 0.02em;
+            line-height: 1.0;
+            margin: 2px 0;
+        }
+
+        /* Compact alignment */
+        .alignment-section {
+            margin-top: 10px;
+            border-top: 1px solid #ccc;
+            padding-top: 6px;
+        }
+
+        .alignment {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 5pt;
+            line-height: 1.0;
+            letter-spacing: 0.01em;
+            background: #fafafa;
+            border: 1px solid #ddd;
+            padding: 4px 6px;
+            margin: 4px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        .alignment-row {
+            margin-bottom: 1px;
+        }
+
+        .alignment-label {
+            display: inline-block;
+            width: 90px;
+            font-weight: bold;
+            color: #333;
+            font-size: 7pt;
+        }
+
+        /* Separator between entries */
+        .entry-separator {
+            border-bottom: 1px dotted #999;
+            margin: 8px 0;
+        }
+
+        /* Print optimization */
+        @media print {
+            body {
+                font-size: 8pt;
+                padding: 0;
+            }
+            .sequence-entry {
+                page-break-inside: avoid;
+            }
+            .alignment {
+                page-break-inside: avoid;
+            }
+        }
+
+        /* Bold sequences styling - removed underline */
+    </style>
 </head>
 <body>
 """)
@@ -1189,28 +1361,32 @@ body { font-family: Arial, Helvetica, sans-serif; }
         # Species information
         species_display = species_name.replace('_', ' ')
         assembly_name = get_assembly_name(species_name)
-        f.write(f"<h2>{species_display}</h2>\n")
-        f.write(f"<p><strong>Assembly:</strong> {assembly_name}</p>\n")
+        f.write(f"<h1>{species_display}</h1>\n")
+
+        # Get taxonomic lineage
+        lineage_cmd = f"python3 ./scripts/get_taxonomic_lineage.py '{species_display}'"
+        lineage_result = subprocess.run(lineage_cmd, shell=True, capture_output=True, text=True)
+        if lineage_result.returncode == 0 and lineage_result.stdout.strip() and not lineage_result.stdout.startswith("Taxonomic lineage not found"):
+            f.write(f'<div class="taxonomic-lineage">\n')
+            f.write(f"<strong>Taxonomic lineage:</strong> {lineage_result.stdout.strip()}\n")
+            f.write("</div>\n")
+
+        f.write(f'<div class="assembly-info">\n')
+        f.write(f"<strong>Assembly:</strong> {assembly_name}\n")
+        f.write("</div>\n")
 
         # lncRNA sequences section
-        f.write("<h4>Identified lncRNAs</h4>\n")
-        f.write('<pre class="alignment" style="font-size:8px;font-family:monospace;line-height:1.0;margin:0;padding:0;">\n')
-
         # Format lncRNA sequences with scores
         if output_file.exists():
-            format_cmd = f"cat {output_file} | python3 ./scripts/html_format_seq.py {score_output} {incomplete_file} {noe_scores_file}"
+            format_cmd = f"cat {output_file} | python3 ./scripts/html_format_seq.py {score_output} {incomplete_file} {noe_scores_file} {stats_file}"
             result = subprocess.run(format_cmd, shell=True, capture_output=True, text=True)
             if result.returncode == 0:
                 f.write(result.stdout)
             else:
                 f.write("Error formatting lncRNA sequences\n")
 
-        f.write("</pre>\n")
-
         # Pairwise sequence identities section - AFTER sequences, BEFORE upstream alignment
         if identities_file.exists() and identities_file.stat().st_size > 0:
-            f.write("<h4>Pairwise sequence identities</h4>\n")
-
             # Read and parse the identities file
             identities_data = []
             with open(identities_file, 'r') as id_f:
@@ -1250,8 +1426,9 @@ body { font-family: Arial, Helvetica, sans-serif; }
                 f.write('</table>\n')
 
         # Upstream promoter alignment section
-        f.write("<h4>Upstream promoter alignment</h4>\n")
-        f.write('<pre class="alignment" style="font-size:8px;font-family:monospace;line-height:1.0;margin:0;padding:0;">\n')
+        f.write('<div class="alignment-section">\n')
+        f.write("<h2>Upstream promoter alignment</h2>\n")
+        f.write('<pre class="alignment">\n')
 
         # Format ALL upstream sequences in ClustalW-like alignment format
         if upstream_output.exists():
@@ -1264,6 +1441,7 @@ body { font-family: Arial, Helvetica, sans-serif; }
                 f.write("Error formatting upstream alignment\n")
 
         f.write("</pre>\n")
+        f.write("</div>\n")
 
         f.write("</body>\n</html>\n")
 

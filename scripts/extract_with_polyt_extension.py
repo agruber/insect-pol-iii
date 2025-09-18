@@ -21,17 +21,18 @@ def has_polyt_termination(sequence, min_ts=4):
     match = re.search(r'T{4,}$', seq_upper)
     return match is not None
 
-def extend_sequence_to_polyt(feature, genome_seq, max_extension=1000):
+def extend_sequence_to_polyt(feature, genome_seq, max_extension=20):
     """
-    Extract sequence and extend until poly-T termination is found.
+    Extract sequence and check if there are additional Ts after the 3' end.
+    If the sequence ends with Ts and more Ts are available, extend the coordinates.
 
     Args:
         feature: GFF3 feature with coordinates
         genome_seq: Full genome sequence for the chromosome
-        max_extension: Maximum number of bases to extend beyond original end
+        max_extension: Maximum number of bases to extend beyond original end (default: 20)
 
     Returns:
-        Extended sequence or original sequence if poly-T not found
+        Tuple of (sequence, was_extended, new_start, new_end)
     """
     seq_length = len(genome_seq)
 
@@ -42,7 +43,7 @@ def extend_sequence_to_polyt(feature, genome_seq, max_extension=1000):
     # Validate original coordinates
     if start_idx < 0 or end_idx > seq_length:
         print(f"Warning: Invalid coordinates {feature.start}-{feature.end} for sequence length {seq_length}", file=sys.stderr)
-        return None
+        return None, False, feature.start, feature.end
 
     # Extract original sequence
     original_seq = genome_seq[start_idx:end_idx]
@@ -51,46 +52,56 @@ def extend_sequence_to_polyt(feature, genome_seq, max_extension=1000):
     if feature.strand == '-':
         original_seq = original_seq.reverse_complement()
 
-    # Check if original sequence already has poly-T termination
-    if has_polyt_termination(original_seq):
-        return original_seq
+    # Convert to string and check if it ends with Ts
+    original_str = str(original_seq).upper()
 
-    # For extension, we need to work in the direction of transcription
-    # For + strand: extend towards higher coordinates (3' direction)
-    # For - strand: extend towards lower coordinates (5' direction, but 3' of transcript)
+    # Find trailing Ts in the original sequence
+    trailing_t_match = re.search(r'T+$', original_str)
+    if not trailing_t_match:
+        # Sequence doesn't end with Ts, no extension needed
+        return original_seq, False, feature.start, feature.end
 
-    extended_seq = original_seq
+    # Check for additional Ts beyond the current 3' end
     extension_length = 0
+    new_start = feature.start
+    new_end = feature.end
 
-    while extension_length < max_extension:
-        extension_length += 1
+    if feature.strand == '+':
+        # For + strand, check downstream for more Ts
+        max_possible = min(max_extension, seq_length - end_idx)
+        if max_possible > 0:
+            downstream_seq = str(genome_seq[end_idx:end_idx + max_possible]).upper()
+            # Count leading Ts in downstream sequence
+            leading_t_match = re.match(r'^T+', downstream_seq)
+            if leading_t_match:
+                extension_length = len(leading_t_match.group())
+                new_end = feature.end + extension_length
+                extended_seq = genome_seq[start_idx:end_idx + extension_length]
+                print(f"  Extended {feature.seqid}:{feature.start}-{feature.end}({feature.strand}) by {extension_length}bp to {new_start}-{new_end} (additional Ts found)", file=sys.stderr)
+                return extended_seq, True, new_start, new_end
+    else:
+        # For - strand, check upstream for more As (which become Ts after reverse complement)
+        max_possible = min(max_extension, start_idx)
+        if max_possible > 0:
+            upstream_seq = str(genome_seq[start_idx - max_possible:start_idx]).upper()
+            # Count trailing As in upstream sequence
+            trailing_a_match = re.search(r'A+$', upstream_seq)
+            if trailing_a_match:
+                extension_length = len(trailing_a_match.group())
+                new_start = feature.start - extension_length
+                extended_region = genome_seq[start_idx - extension_length:end_idx]
+                extended_seq = extended_region.reverse_complement()
+                print(f"  Extended {feature.seqid}:{feature.start}-{feature.end}({feature.strand}) by {extension_length}bp to {new_start}-{new_end} (additional As found upstream)", file=sys.stderr)
+                return extended_seq, True, new_start, new_end
 
-        if feature.strand == '+':
-            # Extend towards higher coordinates
-            new_end = end_idx + extension_length
-            if new_end > seq_length:
-                break
-            extended_seq = genome_seq[start_idx:new_end]
-        else:
-            # Extend towards lower coordinates, then reverse complement
-            new_start = start_idx - extension_length
-            if new_start < 0:
-                break
-            extended_region = genome_seq[new_start:end_idx]
-            extended_seq = extended_region.reverse_complement()
+    # No extension possible or needed
+    return original_seq, False, feature.start, feature.end
 
-        # Check if we found poly-T termination
-        if has_polyt_termination(extended_seq):
-            print(f"  Extended {feature.seqid}:{feature.start}-{feature.end}({feature.strand}) by {extension_length}bp to find poly-T termination", file=sys.stderr)
-            return extended_seq
-
-    # If we couldn't find poly-T within max_extension, return original sequence
-    print(f"  Warning: Could not find poly-T termination within {max_extension}bp for {feature.seqid}:{feature.start}-{feature.end}({feature.strand})", file=sys.stderr)
-    return original_seq
-
-def create_fasta_header(feature, seq_length, species_name, feature_counter):
+def create_fasta_header(feature, seq_length, species_name, feature_counter, new_start=None, new_end=None):
     """Create simple FASTA header: >Species_name-N|type|seqid|start|end|strand"""
-    return f"{species_name}-{feature_counter}|{feature.type}|{feature.seqid}|{feature.start}|{feature.end}|{feature.strand}"
+    start = new_start if new_start is not None else feature.start
+    end = new_end if new_end is not None else feature.end
+    return f"{species_name}-{feature_counter}|{feature.type}|{feature.seqid}|{start}|{end}|{feature.strand}"
 
 def process_gff3_with_extension(gff3_input, genome_dict, output_handle, species_name, incomplete_file=None):
     """Process GFF3 file and extract sequences with poly-T extension"""
@@ -134,11 +145,11 @@ def process_gff3_with_extension(gff3_input, genome_dict, output_handle, species_
         genome_seq = genome_dict[feature.seqid].seq
 
         # Extract sequence with poly-T extension
-        sequence = extend_sequence_to_polyt(feature, genome_seq)
+        sequence, was_extended, new_start, new_end = extend_sequence_to_polyt(feature, genome_seq)
 
         if sequence is not None:
-            # Create FASTA header
-            header = create_fasta_header(feature, len(sequence), species_name, sequences_extracted + 1)
+            # Create FASTA header with potentially extended coordinates
+            header = create_fasta_header(feature, len(sequence), species_name, sequences_extracted + 1, new_start, new_end)
 
             # Check if sequence is incomplete (doesn't end with poly-T)
             if not has_polyt_termination(sequence):
