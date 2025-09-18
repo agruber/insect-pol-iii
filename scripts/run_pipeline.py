@@ -660,6 +660,24 @@ def run_promoterwindow_pipeline(species_name: str, config: Dict, input_file: Opt
 
     print(f"Promoter window analysis completed.", file=sys.stderr)
 
+def get_assembly_name(species_name: str) -> str:
+    """Get assembly name from genome.fna.gz symlink"""
+    species_dir = Path("genomes") / species_name
+    genome_file = species_dir / "genome.fna.gz"
+
+    try:
+        if genome_file.is_symlink():
+            # Get the target of the symlink
+            target = genome_file.resolve().name
+            # Remove .fna.gz extension to get assembly name
+            assembly_name = target.replace('.fna.gz', '')
+            return assembly_name
+        else:
+            # If not a symlink, try to extract from filename
+            return genome_file.name.replace('.fna.gz', '')
+    except:
+        return "Unknown assembly"
+
 def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Optional[str] = None):
     """Extract noeCR34335 lncRNA hits with promoter annotations for publication"""
 
@@ -1025,6 +1043,57 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
     else:
         print(f"  Wrote promoter scores to {score_output}", file=sys.stderr)
 
+    # Step 9: Additional filtering - Check if genomic RNA sequences start with G+CG+TC pattern
+    print(f"\n  Checking genomic RNA sequences for G+CG+TC pattern...", file=sys.stderr)
+    import re
+    from Bio import SeqIO
+    pattern = re.compile(r'^G+CG+TC')
+
+    sequences_to_keep = []
+    sequences_removed = []
+
+    # Read and check each sequence in lncrna.fa
+    if output_file.exists():
+        for record in SeqIO.parse(output_file, 'fasta'):
+            seq_str = str(record.seq).upper()
+            if pattern.match(seq_str):
+                sequences_to_keep.append(record)
+            else:
+                sequences_removed.append(record.id)
+                # Print red warning
+                print(f"    \033[91mWARNING: Removing {record.id} - sequence does not match /^G+CG+TC/ pattern\033[0m", file=sys.stderr)
+                print(f"    \033[91m         Sequence starts with: {seq_str[:50]}...\033[0m", file=sys.stderr)
+
+        # Rewrite lncrna.fa with only sequences that match the pattern
+        if sequences_removed:
+            with open(output_file, 'w') as f:
+                SeqIO.write(sequences_to_keep, f, 'fasta')
+
+            # Get short IDs of removed sequences
+            removed_short_ids = set()
+            for record_id in sequences_removed:
+                short_id = record_id.split('|')[0]
+                removed_short_ids.add(short_id)
+
+            # Also update upstream.fa to remove corresponding sequences
+            if upstream_output.exists():
+                upstream_to_keep = []
+                for record in SeqIO.parse(upstream_output, 'fasta'):
+                    seq_id = record.id.split('|')[0]
+                    # Only remove noeCR34335 sequences that failed the pattern test
+                    if 'noeCR34335' in record.id and seq_id in removed_short_ids:
+                        continue  # Skip this sequence
+                    upstream_to_keep.append(record)
+
+                # Rewrite upstream.fa
+                with open(upstream_output, 'w') as f:
+                    SeqIO.write(upstream_to_keep, f, 'fasta')
+
+            print(f"  Filtered out {len(sequences_removed)} sequences not matching G+CG+TC pattern", file=sys.stderr)
+            print(f"  Kept {len(sequences_to_keep)} sequences in lncrna.fa", file=sys.stderr)
+        else:
+            print(f"  All sequences match the G+CG+TC pattern", file=sys.stderr)
+
     # Clean up temporary files
     try:
         os.unlink(temp_gff)
@@ -1045,7 +1114,35 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
             print(result.stderr, file=sys.stderr)
         print(f"  cmsearch scores written to {noe_scores_file}", file=sys.stderr)
 
-    # Step 8: Generate HTML and PDF reports
+    # Step 8: Calculate pairwise identities if there are multiple sequences
+    identities_file = results_dir / "lncrna.identities"
+    if output_file.exists():
+        # Count sequences in lncrna.fa
+        seq_count = 0
+        with open(output_file, 'r') as f:
+            for line in f:
+                if line.startswith('>'):
+                    seq_count += 1
+
+        if seq_count >= 2:
+            print(f"\n  Calculating pairwise identities for {seq_count} sequences...", file=sys.stderr)
+            identity_cmd = f"cat {output_file} | ./scripts/calculate_pairwise_identities.py > {identities_file}"
+            result = subprocess.run(identity_cmd, shell=True, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"  Warning: Pairwise identity calculation failed: {result.stderr}", file=sys.stderr)
+                # Create empty file to avoid errors later
+                identities_file.touch()
+            else:
+                print(f"  Pairwise identities written to {identities_file}", file=sys.stderr)
+        else:
+            print(f"  Skipping pairwise identity calculation (only {seq_count} sequence(s))", file=sys.stderr)
+            # Create empty file
+            identities_file.touch()
+    else:
+        # Create empty file if lncrna.fa doesn't exist
+        identities_file.touch()
+
+    # Step 9: Generate HTML and PDF reports
     print(f"\n  Generating HTML and PDF reports...", file=sys.stderr)
 
     html_file = results_dir / "lncrna.html"
@@ -1091,7 +1188,9 @@ body { font-family: Arial, Helvetica, sans-serif; }
 
         # Species information
         species_display = species_name.replace('_', ' ')
+        assembly_name = get_assembly_name(species_name)
         f.write(f"<h2>{species_display}</h2>\n")
+        f.write(f"<p><strong>Assembly:</strong> {assembly_name}</p>\n")
 
         # lncRNA sequences section
         f.write("<h4>Identified lncRNAs</h4>\n")
@@ -1107,6 +1206,48 @@ body { font-family: Arial, Helvetica, sans-serif; }
                 f.write("Error formatting lncRNA sequences\n")
 
         f.write("</pre>\n")
+
+        # Pairwise sequence identities section - AFTER sequences, BEFORE upstream alignment
+        if identities_file.exists() and identities_file.stat().st_size > 0:
+            f.write("<h4>Pairwise sequence identities</h4>\n")
+
+            # Read and parse the identities file
+            identities_data = []
+            with open(identities_file, 'r') as id_f:
+                header = id_f.readline()  # Skip header
+                for line in id_f:
+                    if line.strip():
+                        parts = line.strip().split('\t')
+                        if len(parts) >= 3:
+                            identities_data.append((parts[0], parts[1], float(parts[2])))
+
+            if identities_data:
+                # Create a nice HTML table with smaller font
+                f.write('<table style="border-collapse:collapse;margin:10px 0;font-size:10px;">\n')
+                f.write('<tr style="background-color:#f2f2f2;">')
+                f.write('<th style="border:1px solid #ddd;padding:4px;text-align:left;">Sequence 1</th>')
+                f.write('<th style="border:1px solid #ddd;padding:4px;text-align:left;">Sequence 2</th>')
+                f.write('<th style="border:1px solid #ddd;padding:4px;text-align:center;">Identity (%)</th>')
+                f.write('</tr>\n')
+
+                for seq1, seq2, identity in identities_data:
+                    # Color code based on identity level
+                    if identity >= 80:
+                        color = "#4CAF50"  # Green for high identity
+                    elif identity >= 50:
+                        color = "#FFA500"  # Orange for medium identity
+                    else:
+                        color = "#f44336"  # Red for low identity
+
+                    f.write('<tr>')
+                    f.write(f'<td style="border:1px solid #ddd;padding:4px;font-size:10px;">{seq1}</td>')
+                    f.write(f'<td style="border:1px solid #ddd;padding:4px;font-size:10px;">{seq2}</td>')
+                    f.write(f'<td style="border:1px solid #ddd;padding:4px;text-align:center;">')
+                    f.write(f'<span style="background-color:{color};color:white;padding:1px 4px;border-radius:2px;font-weight:bold;font-size:10px;">')
+                    f.write(f'{identity:.1f}%</span></td>')
+                    f.write('</tr>\n')
+
+                f.write('</table>\n')
 
         # Upstream promoter alignment section
         f.write("<h4>Upstream promoter alignment</h4>\n")

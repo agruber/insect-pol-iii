@@ -17,28 +17,36 @@ def clean_species_name(species_name):
 def generate_download_commands(df, output_dir="genomes"):
     """Generate download commands for filtered dataframe"""
     commands = []
-    
+
     for _, row in df.iterrows():
         species = clean_species_name(row.iloc[0])  # Species name (first column)
         url = row.iloc[2]  # Download URL (third column)
-        
+
         # Extract filename from URL
         filename = url.split('/')[-1] + "_genomic.fna.gz"
-        
+
         # Create directory structure
         species_dir = f"{output_dir}/{species}"
         logs_dir = f"{species_dir}/logs"
-        
-        # Download commands
+        target_file = f"{species_dir}/{filename}"
+
+        # Check if file exists, only download if it doesn't
+        commands.append(f"# {species}")
+        commands.append(f"if [ ! -f {target_file} ]; then")
         commands.extend([
-            f"mkdir -p {logs_dir}",
-            f"wget -O {species_dir}/{filename} {url}/{filename}",
-            f"ln -sf {filename} {species_dir}/genome.fna.gz",
-            f"echo 'Downloaded from: {url}' > {logs_dir}/download.txt",
-            f"echo 'Download date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}' >> {logs_dir}/download.txt",
-            f"echo 'Original species name: {row.iloc[0]}' >> {logs_dir}/download.txt"
+            f"  echo 'Downloading {species}...'",
+            f"  mkdir -p {logs_dir}",
+            f"  wget -O {target_file} {url}/{filename}",
+            f"  ln -sf {filename} {species_dir}/genome.fna.gz",
+            f"  echo 'Downloaded from: {url}' > {logs_dir}/download.txt",
+            f"  echo 'Download date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}' >> {logs_dir}/download.txt",
+            f"  echo 'Original species name: {row.iloc[0]}' >> {logs_dir}/download.txt"
         ])
-    
+        commands.append("else")
+        commands.append(f"  echo 'Skipping {species} - file already exists: {target_file}'")
+        commands.append("fi")
+        commands.append("")  # Empty line for readability
+
     return commands
 
 def main():
