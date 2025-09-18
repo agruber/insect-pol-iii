@@ -14,6 +14,7 @@ genomes/*/*.fna.gz
 genomes/*/genome.tsv
 genomes/*/logs/
 genomes/*/upstream.fa
+genomes/*/annotated.fa
 
 # Testing artifacts
 test_*.fa
