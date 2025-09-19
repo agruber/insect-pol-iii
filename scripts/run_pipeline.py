@@ -706,14 +706,15 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
     results_dir = Path("results") / species_name
     results_dir.mkdir(parents=True, exist_ok=True)
 
+    # Clean up existing files in results directory for fresh start
+    print(f"  Cleaning results directory: {results_dir}", file=sys.stderr)
+    for file_path in results_dir.glob("*"):
+        if file_path.is_file():
+            file_path.unlink()
+            print(f"  Removed existing file: {file_path.name}", file=sys.stderr)
+
     if output_file is None:
         output_file = results_dir / "lncrna.fa"
-
-    # Clean up any existing incomplete file from previous runs
-    incomplete_file = results_dir / 'lncrna.incomplete'
-    if incomplete_file.exists():
-        incomplete_file.unlink()
-        print(f"  Removed existing incomplete file: {incomplete_file}", file=sys.stderr)
 
     print(f"Extracting noeCR34335 lncRNA data for {species_name}...", file=sys.stderr)
     print(f"  Promoter info: {annotated_file}", file=sys.stderr)
@@ -852,7 +853,8 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
 
     temp_output = tempfile.mktemp(suffix='.fa')
     incomplete_file = results_dir / 'lncrna.incomplete'
-    extract_cmd = f"./scripts/extract_with_polyt_extension.py -g {genome_file} -s {species_name} --incomplete {incomplete_file} < {filtered_gff} > {temp_output}"
+    extended_file = results_dir / 'lncrna.extended'
+    extract_cmd = f"./scripts/extract_with_polyt_extension.py -g {genome_file} -s {species_name} --incomplete {incomplete_file} --extended {extended_file} < {filtered_gff} > {temp_output}"
 
     result = subprocess.run(extract_cmd, shell=True, capture_output=True, text=True)
     if result.returncode != 0:
@@ -982,6 +984,29 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
             for seq_id in updated_incomplete:
                 f.write(f"{seq_id}\n")
         print(f"  Updated {len(updated_incomplete)} incomplete sequence IDs", file=sys.stderr)
+
+    # Update extended file with mapped IDs if it exists
+    if extended_file.exists():
+        print(f"  Updating extended sequence IDs...", file=sys.stderr)
+        updated_extended = []
+        with open(extended_file, 'r') as f:
+            for line in f:
+                original_id = line.strip()
+                if original_id:
+                    # Extract the sequence number from the original ID (e.g., "Drosophila_emarginata-1" -> "1")
+                    if '-' in original_id:
+                        seq_num = original_id.split('-')[-1]
+                        # Find the corresponding new ID
+                        new_id = f"{species_abbrev}{seq_num}"
+                        updated_extended.append(new_id)
+                    else:
+                        updated_extended.append(original_id)
+
+        # Write updated extended file
+        with open(extended_file, 'w') as f:
+            for seq_id in updated_extended:
+                f.write(f"{seq_id}\n")
+        print(f"  Updated {len(updated_extended)} extended sequence IDs", file=sys.stderr)
 
     # Step 5: Copy filtered upstream sequences to results directory with updated IDs
     upstream_output = results_dir / "upstream.fa"
@@ -1114,7 +1139,7 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
     print(f"\n  Checking genomic RNA sequences for G+[TC]G+TC pattern...", file=sys.stderr)
     import re
     from Bio import SeqIO
-    pattern = re.compile(r'^G+[TC]G+TC', re.IGNORECASE)
+    pattern = re.compile(r'^G+[TC]G+T[TC]', re.IGNORECASE)
 
     sequences_to_keep = []
     sequences_removed = []
@@ -1128,7 +1153,7 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
             else:
                 sequences_removed.append(record.id)
                 # Print red warning
-                print(f"    \033[91mWARNING: Removing {record.id} - sequence does not match /^G+[TC]G+TC/ pattern\033[0m", file=sys.stderr)
+                print(f"    \033[91mWARNING: Removing {record.id} - sequence does not match /^G+[TC]G+T[TC]/ pattern\033[0m", file=sys.stderr)
                 print(f"    \033[91m         Sequence starts with: {seq_str[:50]}...\033[0m", file=sys.stderr)
 
         # Rewrite lncrna.fa with only sequences that match the pattern
@@ -1434,8 +1459,16 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
         lineage_cmd = f"python3 ./scripts/get_taxonomic_lineage.py '{species_display}'"
         lineage_result = subprocess.run(lineage_cmd, shell=True, capture_output=True, text=True)
         if lineage_result.returncode == 0 and lineage_result.stdout.strip() and not lineage_result.stdout.startswith("Taxonomic lineage not found"):
+            # Remove the species name from the end of the lineage
+            lineage = lineage_result.stdout.strip()
+            lineage_parts = lineage.split(' > ')
+            # Remove the last part if it matches the species name
+            if lineage_parts and lineage_parts[-1].lower() == species_display.lower().replace('_', ' '):
+                lineage_parts = lineage_parts[:-1]
+            lineage_without_species = ' > '.join(lineage_parts)
+
             f.write(f'<div class="taxonomic-lineage">\n')
-            f.write(f"<strong>Taxonomic lineage:</strong> {lineage_result.stdout.strip()}\n")
+            f.write(f"<strong>Taxonomic lineage:</strong> {lineage_without_species}\n")
             f.write("</div>\n")
 
         f.write(f'<div class="assembly-info">\n')
@@ -1445,7 +1478,7 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
         # lncRNA sequences section
         # Format lncRNA sequences with scores
         if output_file.exists():
-            format_cmd = f"cat {output_file} | python3 ./scripts/html_format_seq.py {score_output} {incomplete_file} {noe_scores_file} {stats_file}"
+            format_cmd = f"cat {output_file} | python3 ./scripts/html_format_seq.py {score_output} {incomplete_file} {noe_scores_file} {stats_file} {extended_file}"
             result = subprocess.run(format_cmd, shell=True, capture_output=True, text=True)
             if result.returncode == 0:
                 f.write(result.stdout)

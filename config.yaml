@@ -50,7 +50,7 @@ evalues:
   U11: 1e-4
   U12: 1e-4
   tRNAsec: 1e-10
-  snoRNAMe18SA1806: 1e-5
+  snoRNAMe18SA1806: 1e-3
 
 # Genes to exclude for specific taxonomic groups
 exclude_genes:
@@ -75,23 +75,27 @@ low_complexity:
 # BLAST query names mapping (filename -> gene name for GFF3)
 blast_queries:
   noeCR34335: noeCR34335
+  noeCR34335v2: noeCR34335
   snoRNAMe18SA1806: snoRNAMe18SA1806
   7SL: 7SL
 
 # Promoter annotation settings by taxonomic group
 # Applied in order from most specific to least specific (species > genus > family > order > suborder > infraorder > class)
 promoter_annotation:
-  # Infraorder-level settings
   Muscomorpha:
     kmers:
       - AATTCTCA
 
-  # Suborder-level settings
+  Muscidae:
+    kmers:
+      - AATTCDCAT
+    promoter_start: 3
+    promoter_length: 22
+
   Glossata:
     kmers:
       - ATCGCG
 
-  # Family-level settings
   Drosophilidae:
     kmers:
       - TTCYCAA
@@ -106,17 +110,11 @@ promoter_annotation:
     kmers:
       - TTCTCRC
 
-  # Can add genus-level settings
-  # Drosophila:
-  #   kmers:
-  #     - TATAAA
-  #   promoter_length: 20
-
-  # Can add species-level settings
-  # Drosophila_melanogaster:
-  #   kmers:
-  #     - TATAWW
-  #   promoter_length: 25
+  Tachinidae:
+    kmers:
+      - AATTCYCRT
+    promoter_length: 21
+    promoter_start: 2
 
   # Default settings if no taxonomic match found
   default:

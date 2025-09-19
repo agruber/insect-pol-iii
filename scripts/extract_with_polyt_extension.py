@@ -145,11 +145,12 @@ def create_fasta_header(feature, seq_length, species_name, feature_counter, new_
     end = new_end if new_end is not None else feature.end
     return f"{species_name}-{feature_counter}|{feature.type}|{feature.seqid}|{start}|{end}|{feature.strand}"
 
-def process_gff3_with_extension(gff3_input, genome_dict, output_handle, species_name, incomplete_file=None):
+def process_gff3_with_extension(gff3_input, genome_dict, output_handle, species_name, incomplete_file=None, extended_file=None):
     """Process GFF3 file and extract sequences with poly-T extension"""
     features_processed = 0
     sequences_extracted = 0
     incomplete_sequences = []
+    extended_sequences = []
 
     # Handle both filename and file handle
     if hasattr(gff3_input, 'read'):
@@ -193,6 +194,11 @@ def process_gff3_with_extension(gff3_input, genome_dict, output_handle, species_
             # Create FASTA header with potentially extended coordinates
             header = create_fasta_header(feature, len(sequence), species_name, sequences_extracted + 1, new_start, new_end)
 
+            # Track if sequence was extended
+            if was_extended:
+                seq_id = header.split('|')[0].lstrip('>')
+                extended_sequences.append(seq_id)
+
             # Check if sequence is incomplete (doesn't end with poly-T)
             if not has_polyt_termination(sequence):
                 incomplete_sequences.append(header.split('|')[0].lstrip('>'))  # Just the ID part
@@ -214,6 +220,13 @@ def process_gff3_with_extension(gff3_input, genome_dict, output_handle, species_
                 f.write(f"{seq_id}\n")
         print(f"Wrote {len(incomplete_sequences)} incomplete sequence IDs to {incomplete_file}", file=sys.stderr)
 
+    # Write extended sequences to file if any were found
+    if extended_sequences and extended_file:
+        with open(extended_file, 'w') as f:
+            for seq_id in extended_sequences:
+                f.write(f"{seq_id}\n")
+        print(f"Wrote {len(extended_sequences)} extended sequence IDs to {extended_file}", file=sys.stderr)
+
 def main():
     parser = create_standard_parser(
         description='Extract FASTA sequences from genome file with poly-T extension',
@@ -234,6 +247,8 @@ Examples:
                        help='Output FASTA file (use stdout if not provided)')
     parser.add_argument('--incomplete',
                        help='Output file for incomplete sequence IDs (sequences without poly-T termination)')
+    parser.add_argument('--extended',
+                       help='Output file for extended sequence IDs (sequences that were extended to find poly-T)')
 
     args = parser.parse_args()
 
@@ -248,7 +263,7 @@ Examples:
         # Determine input source
         input_source = args.features if args.features else sys.stdin
         # Process GFF3 and extract sequences
-        process_gff3_with_extension(input_source, genome_dict, output_handle, args.species, args.incomplete)
+        process_gff3_with_extension(input_source, genome_dict, output_handle, args.species, args.incomplete, args.extended)
     finally:
         if args.output:
             output_handle.close()

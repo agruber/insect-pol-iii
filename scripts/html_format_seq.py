@@ -82,6 +82,18 @@ def load_incomplete_ids(incomplete_file):
         pass
     return incomplete_ids
 
+def load_extended_ids(extended_file):
+    """Load extended sequence IDs from file"""
+    extended_ids = set()
+    try:
+        with open(extended_file, 'r') as f:
+            for line in f:
+                if line.strip():
+                    extended_ids.add(line.strip())
+    except:
+        pass
+    return extended_ids
+
 def get_score_color(score_str):
     """Get color class based on score value"""
     try:
@@ -140,7 +152,7 @@ def wrap_sequence_html(seq, line_length=150):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 html_format_seq.py <score_file> [incomplete_file] [noe_score_file] [stats_file]", file=sys.stderr)
+        print("Usage: python3 html_format_seq.py <score_file> [incomplete_file] [noe_score_file] [stats_file] [extended_file]", file=sys.stderr)
         sys.exit(1)
 
     score_file = sys.argv[1]
@@ -163,6 +175,12 @@ def main():
     if len(sys.argv) >= 5:
         stats_file = sys.argv[4]
         lncrna_stats = load_lncrna_stats(stats_file)
+
+    # Load extended sequence IDs if provided
+    extended_ids = set()
+    if len(sys.argv) >= 6:
+        extended_file = sys.argv[5]
+        extended_ids = load_extended_ids(extended_file)
 
     # Read FASTA from stdin
     for record in SeqIO.parse(sys.stdin, "fasta"):
@@ -223,6 +241,10 @@ def main():
                     pol2_score, pol3_score = scores[seq_id]
                     metadata_items.append(f'<span class="metadata-item">PSE: {pol3_score}</span>')
 
+            # Add extended marker if needed
+            if seq_id in extended_ids:
+                metadata_items.append('<span class="metadata-item" style="color:green;font-weight:bold;">EXTENDED</span>')
+
             # Add incomplete marker if needed
             if seq_id in incomplete_ids:
                 metadata_items.append('<span class="metadata-item" style="color:red;font-weight:bold;">INCOMPLETE</span>')
@@ -249,8 +271,14 @@ def main():
 
             print(f'<div class="sequence-header">{" | ".join(header_parts)}</div>')
 
+            metadata_items = []
+            if seq_id in extended_ids:
+                metadata_items.append('<span class="metadata-item" style="color:green;font-weight:bold;">EXTENDED</span>')
             if seq_id in incomplete_ids:
-                print('<div class="sequence-metadata"><span class="metadata-item" style="color:red;font-weight:bold;">INCOMPLETE</span></div>')
+                metadata_items.append('<span class="metadata-item" style="color:red;font-weight:bold;">INCOMPLETE</span>')
+
+            if metadata_items:
+                print(f'<div class="sequence-metadata">{"".join(metadata_items)}</div>')
 
             colored_sequence = wrap_sequence_html(str(record.seq))
             print(f'<div class="sequence">{colored_sequence}</div>')

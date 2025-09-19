@@ -701,7 +701,7 @@ class SpeciesTreeExplorer:
 def main():
     parser = argparse.ArgumentParser(description='Interactive tree-based species explorer')
     parser.add_argument('tsv_file', help='Path to the genomes TSV file')
-    parser.add_argument('-s', '--start', default='Arthropoda', 
+    parser.add_argument('-s', '--start', default='Diptera', 
                        help='Starting taxon to focus on (default: Arthropoda)')
     
     args = parser.parse_args()

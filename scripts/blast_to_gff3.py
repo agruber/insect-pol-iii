@@ -76,38 +76,46 @@ def blast_to_gff3_entry(hit, source="blast", gene_name=None):
 
 def convert_blast_to_gff3(source="blast", gene_name=None):
     """Convert BLAST results from stdin to GFF3 format, writing to stdout"""
-    
+
     # Read from stdin
     in_fh = sys.stdin
-    
+
     # Always write to stdout
     out_fh = sys.stdout
-    
+
     # Write GFF3 header
     out_fh.write("##gff-version 3\n")
     out_fh.write(f"##date {datetime.now().strftime('%Y-%m-%d')}\n")
     out_fh.write(f"##source-version blast_to_gff3.py\n")
-    
-    hits_written = 0
-    
+
+    # Collect all hits first for sorting
+    hits = []
+
     for line in in_fh:
         line = line.strip()
-        
+
         # Skip comments and empty lines
         if line.startswith('#') or not line:
             continue
-        
+
         # Parse the hit
         hit = parse_blast_line(line)
         if hit is None:
             continue
-        
-        # Convert to GFF3 and write
+
+        hits.append(hit)
+
+    # Sort hits by alignment length (longest first)
+    hits.sort(key=lambda x: x['length'], reverse=True)
+
+    # Convert sorted hits to GFF3 and write
+    hits_written = 0
+    for hit in hits:
         gff3_line = blast_to_gff3_entry(hit, source, gene_name)
         out_fh.write(gff3_line + '\n')
         hits_written += 1
-    
-    print(f"Converted {hits_written} BLAST hits to GFF3 format", file=sys.stderr)
+
+    print(f"Converted {hits_written} BLAST hits to GFF3 format (sorted by alignment length)", file=sys.stderr)
 
 def main():
     parser = argparse.ArgumentParser(
