@@ -709,6 +709,12 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
     if output_file is None:
         output_file = results_dir / "lncrna.fa"
 
+    # Clean up any existing incomplete file from previous runs
+    incomplete_file = results_dir / 'lncrna.incomplete'
+    if incomplete_file.exists():
+        incomplete_file.unlink()
+        print(f"  Removed existing incomplete file: {incomplete_file}", file=sys.stderr)
+
     print(f"Extracting noeCR34335 lncRNA data for {species_name}...", file=sys.stderr)
     print(f"  Promoter info: {annotated_file}", file=sys.stderr)
     print(f"  BLAST hits: {blast_file}", file=sys.stderr)
@@ -853,6 +859,34 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
         print(f"Error extracting sequences: {result.stderr}", file=sys.stderr)
         sys.exit(1)
 
+    # Show extension details from stderr
+    if result.stderr:
+        stderr_lines = result.stderr.split('\n')
+        extension_found = False
+        i = 0
+        while i < len(stderr_lines):
+            line = stderr_lines[i].strip()
+            if 'Extended' in line:
+                if not extension_found:
+                    print("  Extension details:", file=sys.stderr)
+                    extension_found = True
+                print(f"    {line}", file=sys.stderr)
+                # Check if next line is "Added sequence"
+                if i + 1 < len(stderr_lines) and 'Added sequence' in stderr_lines[i + 1]:
+                    added_line = stderr_lines[i + 1].strip()
+                    # Truncate long sequences for readability
+                    if len(added_line) > 120:
+                        sequence_part = added_line.split(': ', 1)[1] if ': ' in added_line else added_line
+                        if len(sequence_part) > 80:
+                            truncated = sequence_part[:40] + '...' + sequence_part[-40:]
+                            print(f"    Added sequence: {truncated} ({len(sequence_part)} bp)", file=sys.stderr)
+                        else:
+                            print(f"    {added_line}", file=sys.stderr)
+                    else:
+                        print(f"    {added_line}", file=sys.stderr)
+                    i += 1  # Skip the added sequence line since we processed it
+            i += 1
+
     # Use the blast_to_id_mapping created during filtering
     if 'blast_to_id_mapping' not in locals():
         blast_to_id_mapping = {}
@@ -869,13 +903,46 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
                     parts = header[1:].split('|')
                     if len(parts) >= 6:
                         chrom = parts[2]
-                        start = parts[3]
-                        end = parts[4]
+                        start = int(parts[3])
+                        end = int(parts[4])
                         strand = parts[5]
-                        coord_key = f"{chrom}:{start}-{end}({strand})"
-                        if coord_key in blast_to_id_mapping:
-                            new_id = blast_to_id_mapping[coord_key]
-                            outfile.write(f">{new_id}|noeCR34335|{chrom}|{start}|{end}|{strand}\n")
+
+                        # Find matching ID by checking for overlapping coordinates
+                        # (polyT extension may have changed the coordinates)
+                        matched_id = None
+                        for original_coord_key, mapped_id in blast_to_id_mapping.items():
+                            # Parse original coordinates: "chrom:start-end(strand)"
+                            try:
+                                coord_parts = original_coord_key.split(':')
+                                if len(coord_parts) == 2 and coord_parts[0] == chrom:
+                                    range_strand = coord_parts[1].split('(')
+                                    if len(range_strand) == 2 and range_strand[1].rstrip(')') == strand:
+                                        orig_range = range_strand[0].split('-')
+                                        if len(orig_range) == 2:
+                                            orig_start = int(orig_range[0])
+                                            orig_end = int(orig_range[1])
+
+                                            # Check if coordinates overlap or are close (within 1000bp extension range)
+                                            # For - strand, extension goes upstream (start decreases)
+                                            # For + strand, extension goes downstream (end increases)
+                                            overlap = False
+                                            if strand == '-':
+                                                # Check if extended start <= original start and end matches or overlaps
+                                                if start <= orig_start and abs(end - orig_end) <= 50:
+                                                    overlap = True
+                                            else:
+                                                # Check if start matches or overlaps and extended end >= original end
+                                                if abs(start - orig_start) <= 50 and end >= orig_end:
+                                                    overlap = True
+
+                                            if overlap:
+                                                matched_id = mapped_id
+                                                break
+                            except (ValueError, IndexError):
+                                continue
+
+                        if matched_id:
+                            outfile.write(f">{matched_id}|noeCR34335|{chrom}|{start}|{end}|{strand}\n")
                         else:
                             outfile.write(line)
                     else:
@@ -1043,11 +1110,11 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
     else:
         print(f"  Wrote promoter scores to {score_output}", file=sys.stderr)
 
-    # Step 9: Additional filtering - Check if genomic RNA sequences start with G+CG+TC pattern
-    print(f"\n  Checking genomic RNA sequences for G+CG+TC pattern...", file=sys.stderr)
+    # Step 9: Additional filtering - Check if genomic RNA sequences start with G+[TC]G+TC pattern
+    print(f"\n  Checking genomic RNA sequences for G+[TC]G+TC pattern...", file=sys.stderr)
     import re
     from Bio import SeqIO
-    pattern = re.compile(r'^G+CG+TC')
+    pattern = re.compile(r'^G+[TC]G+TC', re.IGNORECASE)
 
     sequences_to_keep = []
     sequences_removed = []
@@ -1061,7 +1128,7 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
             else:
                 sequences_removed.append(record.id)
                 # Print red warning
-                print(f"    \033[91mWARNING: Removing {record.id} - sequence does not match /^G+CG+TC/ pattern\033[0m", file=sys.stderr)
+                print(f"    \033[91mWARNING: Removing {record.id} - sequence does not match /^G+[TC]G+TC/ pattern\033[0m", file=sys.stderr)
                 print(f"    \033[91m         Sequence starts with: {seq_str[:50]}...\033[0m", file=sys.stderr)
 
         # Rewrite lncrna.fa with only sequences that match the pattern
@@ -1092,7 +1159,7 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
             print(f"  Filtered out {len(sequences_removed)} sequences not matching G+CG+TC pattern", file=sys.stderr)
             print(f"  Kept {len(sequences_to_keep)} sequences in lncrna.fa", file=sys.stderr)
         else:
-            print(f"  All sequences match the G+CG+TC pattern", file=sys.stderr)
+            print(f"  All sequences match the G+[TC]G+TC pattern", file=sys.stderr)
 
     # Clean up temporary files
     try:

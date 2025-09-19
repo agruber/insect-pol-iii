@@ -75,15 +75,23 @@ def analyze_sequence(record):
         'has_5prime_motif': 0,
         'has_3prime_motif': 0,
         'longest_polyt': 0,
-        'trailing_t_count': 0
+        'trailing_t_count': 0,
+        'motif_type': 'none'  # Track which motif was found
     }
 
-    # 1. Check for GCGGT within first 10 nt of 5' end
+    # 1. Check for GCGGT within first 10 nt of 5' end, fallback to GTGGT
     first_10nt = sequence[:min(10, seq_length)]
     if 'GCGGT' in first_10nt:
         results['has_5prime_motif'] = 1
+        results['motif_type'] = 'GCGGT'
         # Find the end position of the motif
         motif_start = first_10nt.index('GCGGT')
+        motif_end = motif_start + 5
+    elif 'GTGGT' in first_10nt:
+        results['has_5prime_motif'] = 1
+        results['motif_type'] = 'GTGGT'
+        # Find the end position of the motif
+        motif_start = first_10nt.index('GTGGT')
         motif_end = motif_start + 5
     else:
         motif_end = 0
@@ -150,7 +158,7 @@ def process_fasta(input_source, output_handle):
     """
     # Write header
     header = ['sequence_name', 'has_GCGGT_5prime', 'has_ATCGC_3prime',
-              'longest_polyT_stretch', 'trailing_T_count']
+              'longest_polyT_stretch', 'trailing_T_count', 'motif_5prime_type']
     output_handle.write('\t'.join(header) + '\n')
 
     # Process sequences
@@ -168,7 +176,8 @@ def process_fasta(input_source, output_handle):
                 str(results['has_5prime_motif']),
                 str(results['has_3prime_motif']),
                 str(results['longest_polyt']),
-                str(results['trailing_t_count'])
+                str(results['trailing_t_count']),
+                results['motif_type']
             ]
             output_handle.write('\t'.join(row) + '\n')
 
@@ -185,7 +194,8 @@ def process_fasta(input_source, output_handle):
                     str(results['has_5prime_motif']),
                     str(results['has_3prime_motif']),
                     str(results['longest_polyt']),
-                    str(results['trailing_t_count'])
+                    str(results['trailing_t_count']),
+                    results['motif_type']
                 ]
                 output_handle.write('\t'.join(row) + '\n')
 
@@ -206,10 +216,11 @@ Examples:
 
 Output columns (TSV):
   1. sequence_name - Sequence identifier
-  2. has_GCGGT_5prime - 1 if GCGGT found in first 10nt, 0 otherwise
+  2. has_GCGGT_5prime - 1 if GCGGT or GTGGT found in first 10nt, 0 otherwise
   3. has_ATCGC_3prime - 1 if ATCGC found in last 10nt (after removing trailing Ts), 0 otherwise
   4. longest_polyT_stretch - Length of longest poly-T stretch between motifs
   5. trailing_T_count - Number of T nucleotides at 3' end
+  6. motif_5prime_type - Type of 5' motif found: GCGGT, GTGGT, or none
         """
     )
 

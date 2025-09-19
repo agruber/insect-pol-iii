@@ -21,15 +21,16 @@ def has_polyt_termination(sequence, min_ts=4):
     match = re.search(r'T{4,}$', seq_upper)
     return match is not None
 
-def extend_sequence_to_polyt(feature, genome_seq, max_extension=20):
+def extend_sequence_to_polyt(feature, genome_seq, max_extension=1000):
     """
-    Extract sequence and check if there are additional Ts after the 3' end.
-    If the sequence ends with Ts and more Ts are available, extend the coordinates.
+    Extract sequence and extend until poly-T termination signal is found.
+    First checks if sequence already has sufficient poly-T (4+ Ts). If not,
+    searches downstream/upstream for the nearest poly-T signal and extends to include it.
 
     Args:
         feature: GFF3 feature with coordinates
         genome_seq: Full genome sequence for the chromosome
-        max_extension: Maximum number of bases to extend beyond original end (default: 20)
+        max_extension: Maximum number of bases to extend beyond original end (default: 1000)
 
     Returns:
         Tuple of (sequence, was_extended, new_start, new_end)
@@ -52,49 +53,90 @@ def extend_sequence_to_polyt(feature, genome_seq, max_extension=20):
     if feature.strand == '-':
         original_seq = original_seq.reverse_complement()
 
-    # Convert to string and check if it ends with Ts
+    # Convert to string and check if it already has sufficient poly-T
     original_str = str(original_seq).upper()
 
-    # Find trailing Ts in the original sequence
-    trailing_t_match = re.search(r'T+$', original_str)
-    if not trailing_t_match:
-        # Sequence doesn't end with Ts, no extension needed
+    # Check if sequence already has poly-T termination (4+ consecutive Ts at end)
+    if has_polyt_termination(original_str):
+        # Already has poly-T, but check if we can extend to get more Ts
+        trailing_t_match = re.search(r'T+$', original_str)
+        if trailing_t_match:
+            if feature.strand == '+':
+                # For + strand, check downstream for more Ts
+                max_possible = min(max_extension, seq_length - end_idx)
+                if max_possible > 0:
+                    downstream_seq = str(genome_seq[end_idx:end_idx + max_possible]).upper()
+                    leading_t_match = re.match(r'^T+', downstream_seq)
+                    if leading_t_match:
+                        extension_length = len(leading_t_match.group())
+                        new_end = feature.end + extension_length
+                        extended_seq = genome_seq[start_idx:end_idx + extension_length]
+                        added_sequence = str(genome_seq[end_idx:end_idx + extension_length])
+                        print(f"  Extended {feature.seqid}:{feature.start}-{feature.end}({feature.strand}) by {extension_length}bp to {feature.start}-{new_end} (additional Ts found)", file=sys.stderr)
+                        print(f"    Added sequence: {added_sequence}", file=sys.stderr)
+                        return extended_seq, True, feature.start, new_end
+            else:
+                # For - strand, check upstream for more As
+                max_possible = min(max_extension, start_idx)
+                if max_possible > 0:
+                    upstream_seq = str(genome_seq[start_idx - max_possible:start_idx]).upper()
+                    trailing_a_match = re.search(r'A+$', upstream_seq)
+                    if trailing_a_match:
+                        extension_length = len(trailing_a_match.group())
+                        new_start = feature.start - extension_length
+                        extended_region = genome_seq[start_idx - extension_length:end_idx]
+                        extended_seq = extended_region.reverse_complement()
+                        added_region = genome_seq[start_idx - extension_length:start_idx]
+                        added_sequence = str(added_region.reverse_complement())
+                        print(f"  Extended {feature.seqid}:{feature.start}-{feature.end}({feature.strand}) by {extension_length}bp to {new_start}-{feature.end} (additional As found upstream)", file=sys.stderr)
+                        print(f"    Added sequence: {added_sequence}", file=sys.stderr)
+                        return extended_seq, True, new_start, feature.end
+
+        # Already has poly-T and no additional extension possible
         return original_seq, False, feature.start, feature.end
 
-    # Check for additional Ts beyond the current 3' end
-    extension_length = 0
-    new_start = feature.start
-    new_end = feature.end
+    # Sequence doesn't have poly-T termination, search for it
+    print(f"  Searching for poly-T termination for {feature.seqid}:{feature.start}-{feature.end}({feature.strand})", file=sys.stderr)
 
     if feature.strand == '+':
-        # For + strand, check downstream for more Ts
-        max_possible = min(max_extension, seq_length - end_idx)
-        if max_possible > 0:
-            downstream_seq = str(genome_seq[end_idx:end_idx + max_possible]).upper()
-            # Count leading Ts in downstream sequence
-            leading_t_match = re.match(r'^T+', downstream_seq)
-            if leading_t_match:
-                extension_length = len(leading_t_match.group())
-                new_end = feature.end + extension_length
-                extended_seq = genome_seq[start_idx:end_idx + extension_length]
-                print(f"  Extended {feature.seqid}:{feature.start}-{feature.end}({feature.strand}) by {extension_length}bp to {new_start}-{new_end} (additional Ts found)", file=sys.stderr)
-                return extended_seq, True, new_start, new_end
+        # For + strand, search downstream for TTTTT pattern (5+ Ts for extension)
+        max_search = min(max_extension, seq_length - end_idx)
+        if max_search > 0:
+            search_region = str(genome_seq[end_idx:end_idx + max_search]).upper()
+            # Look for first occurrence of 5+ consecutive Ts
+            polyt_match = re.search(r'T{5,}', search_region)
+            if polyt_match:
+                # Extend to include the poly-T signal
+                extension_to_polyt = polyt_match.end()  # Include the entire poly-T
+                new_end = feature.end + extension_to_polyt
+                extended_seq = genome_seq[start_idx:end_idx + extension_to_polyt]
+                added_sequence = str(genome_seq[end_idx:end_idx + extension_to_polyt])
+                print(f"  Extended {feature.seqid}:{feature.start}-{feature.end}({feature.strand}) by {extension_to_polyt}bp to {feature.start}-{new_end} (found 5+ poly-T at +{polyt_match.start()})", file=sys.stderr)
+                print(f"    Added sequence: {added_sequence}", file=sys.stderr)
+                return extended_seq, True, feature.start, new_end
     else:
-        # For - strand, check upstream for more As (which become Ts after reverse complement)
-        max_possible = min(max_extension, start_idx)
-        if max_possible > 0:
-            upstream_seq = str(genome_seq[start_idx - max_possible:start_idx]).upper()
-            # Count trailing As in upstream sequence
-            trailing_a_match = re.search(r'A+$', upstream_seq)
-            if trailing_a_match:
-                extension_length = len(trailing_a_match.group())
-                new_start = feature.start - extension_length
-                extended_region = genome_seq[start_idx - extension_length:end_idx]
+        # For - strand, search upstream for AAAAA pattern (becomes TTTTT after reverse complement)
+        max_search = min(max_extension, start_idx)
+        if max_search > 0:
+            search_region = str(genome_seq[start_idx - max_search:start_idx]).upper()
+            # Look for last occurrence of 5+ consecutive As (will be first poly-T when reverse complemented)
+            polya_matches = list(re.finditer(r'A{5,}', search_region))
+            if polya_matches:
+                # Take the last match (closest to our sequence)
+                polya_match = polya_matches[-1]
+                # Extend to include from the start of the poly-A
+                extension_to_polya = max_search - polya_match.start()
+                new_start = feature.start - extension_to_polya
+                extended_region = genome_seq[start_idx - extension_to_polya:end_idx]
                 extended_seq = extended_region.reverse_complement()
-                print(f"  Extended {feature.seqid}:{feature.start}-{feature.end}({feature.strand}) by {extension_length}bp to {new_start}-{new_end} (additional As found upstream)", file=sys.stderr)
-                return extended_seq, True, new_start, new_end
+                added_region = genome_seq[start_idx - extension_to_polya:start_idx]
+                added_sequence = str(added_region.reverse_complement())
+                print(f"  Extended {feature.seqid}:{feature.start}-{feature.end}({feature.strand}) by {extension_to_polya}bp to {new_start}-{feature.end} (found 5+ poly-A at -{polya_match.start()})", file=sys.stderr)
+                print(f"    Added sequence: {added_sequence}", file=sys.stderr)
+                return extended_seq, True, new_start, feature.end
 
-    # No extension possible or needed
+    # No 5+ poly-T termination found within search distance
+    print(f"  No 5+ poly-T termination found within {max_extension}bp for {feature.seqid}:{feature.start}-{feature.end}({feature.strand})", file=sys.stderr)
     return original_seq, False, feature.start, feature.end
 
 def create_fasta_header(feature, seq_length, species_name, feature_counter, new_start=None, new_end=None):
