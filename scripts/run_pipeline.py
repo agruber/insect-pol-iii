@@ -1489,41 +1489,97 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
         if identities_file.exists() and identities_file.stat().st_size > 0:
             # Read and parse the identities file
             identities_data = []
+            seq_ids = []
+            identity_dict = {}
+
             with open(identities_file, 'r') as id_f:
                 header = id_f.readline()  # Skip header
                 for line in id_f:
                     if line.strip():
                         parts = line.strip().split('\t')
                         if len(parts) >= 3:
-                            identities_data.append((parts[0], parts[1], float(parts[2])))
+                            seq1, seq2, identity_val = parts[0], parts[1], float(parts[2])
+                            identities_data.append((seq1, seq2, identity_val))
 
-            if identities_data:
-                # Create a nice HTML table with smaller font
-                f.write('<table style="border-collapse:collapse;margin:10px 0;font-size:10px;">\n')
-                f.write('<tr style="background-color:#f2f2f2;">')
-                f.write('<th style="border:1px solid #ddd;padding:4px;text-align:left;">Sequence 1</th>')
-                f.write('<th style="border:1px solid #ddd;padding:4px;text-align:left;">Sequence 2</th>')
-                f.write('<th style="border:1px solid #ddd;padding:4px;text-align:center;">Identity (%)</th>')
+                            # Track unique sequence IDs in order
+                            if seq1 not in seq_ids:
+                                seq_ids.append(seq1)
+                            if seq2 not in seq_ids:
+                                seq_ids.append(seq2)
+
+                            # Store in dictionary for matrix lookup
+                            identity_dict[(seq1, seq2)] = identity_val
+                            identity_dict[(seq2, seq1)] = identity_val
+
+            if identities_data and len(seq_ids) <= 10:
+                # For 10 or fewer sequences, show a compact matrix
+                f.write('<div style="margin: 10px 0;">\n')
+                f.write('<h3 style="font-size:11pt;margin-bottom:5px;">Pairwise Identity Matrix (%)</h3>\n')
+                f.write('<table style="border-collapse:collapse;font-size:9px;">\n')
+
+                # Header row
+                f.write('<tr><td style="border:1px solid #ddd;padding:3px;background:#f2f2f2;"></td>')
+                for seq_id in seq_ids:
+                    f.write(f'<th style="border:1px solid #ddd;padding:3px;background:#f2f2f2;font-weight:bold;">{seq_id}</th>')
                 f.write('</tr>\n')
 
-                for seq1, seq2, identity in identities_data:
-                    # Color code based on identity level
-                    if identity >= 80:
-                        color = "#4CAF50"  # Green for high identity
-                    elif identity >= 50:
-                        color = "#FFA500"  # Orange for medium identity
-                    else:
-                        color = "#f44336"  # Red for low identity
-
-                    f.write('<tr>')
-                    f.write(f'<td style="border:1px solid #ddd;padding:4px;font-size:10px;">{seq1}</td>')
-                    f.write(f'<td style="border:1px solid #ddd;padding:4px;font-size:10px;">{seq2}</td>')
-                    f.write(f'<td style="border:1px solid #ddd;padding:4px;text-align:center;">')
-                    f.write(f'<span style="background-color:{color};color:white;padding:1px 4px;border-radius:2px;font-weight:bold;font-size:10px;">')
-                    f.write(f'{identity:.1f}%</span></td>')
+                # Data rows
+                for i, seq1 in enumerate(seq_ids):
+                    f.write(f'<tr><th style="border:1px solid #ddd;padding:3px;background:#f2f2f2;text-align:left;font-weight:bold;">{seq1}</th>')
+                    for j, seq2 in enumerate(seq_ids):
+                        if i == j:
+                            # Diagonal - self comparison
+                            f.write('<td style="border:1px solid #ddd;padding:3px;text-align:center;background:#e0e0e0;">-</td>')
+                        elif i < j:
+                            # Upper triangle - show values
+                            identity = identity_dict.get((seq1, seq2), None)
+                            if identity is None:
+                                # Missing comparison
+                                f.write('<td style="border:1px solid #ddd;padding:3px;text-align:center;background:#f0f0f0;">n/a</td>')
+                            else:
+                                # Color code based on identity level
+                                if identity >= 80:
+                                    color = "#4CAF50"  # Green
+                                elif identity >= 50:
+                                    color = "#FFA500"  # Orange
+                                else:
+                                    color = "#f44336"  # Red
+                                f.write(f'<td style="border:1px solid #ddd;padding:3px;text-align:center;">')
+                                f.write(f'<span style="background-color:{color};color:white;padding:1px 3px;border-radius:2px;font-size:8px;">')
+                                f.write(f'{identity:.0f}</span></td>')
+                        else:
+                            # Lower triangle - empty
+                            f.write('<td style="border:1px solid #ddd;padding:3px;background:#f9f9f9;"></td>')
                     f.write('</tr>\n')
 
                 f.write('</table>\n')
+                f.write('</div>\n')
+
+            elif identities_data:
+                # For more than 10 sequences, show summary statistics only
+                all_identities = [identity for _, _, identity in identities_data]
+                min_identity = min(all_identities)
+                max_identity = max(all_identities)
+                avg_identity = sum(all_identities) / len(all_identities)
+
+                # Calculate distribution
+                low_count = sum(1 for i in all_identities if i < 30)
+                med_count = sum(1 for i in all_identities if 30 <= i < 60)
+                high_count = sum(1 for i in all_identities if i >= 60)
+
+                f.write('<div style="margin: 10px 0;">\n')
+                f.write('<h3 style="font-size:11pt;margin-bottom:5px;">Pairwise Identity Summary</h3>\n')
+                f.write('<div style="background:#f9f9f9;padding:8px;border:1px solid #ddd;border-radius:3px;font-size:10px;">\n')
+                f.write(f'<div><strong>Sequences:</strong> {len(seq_ids)}</div>\n')
+                f.write(f'<div><strong>Comparisons:</strong> {len(identities_data)}</div>\n')
+                f.write(f'<div><strong>Identity range:</strong> {min_identity:.1f}% - {max_identity:.1f}% (avg: {avg_identity:.1f}%)</div>\n')
+                f.write('<div><strong>Distribution:</strong> ')
+                f.write(f'<span style="color:#f44336;">Low (&lt;30%): {low_count}</span> | ')
+                f.write(f'<span style="color:#FFA500;">Medium (30-60%): {med_count}</span> | ')
+                f.write(f'<span style="color:#4CAF50;">High (≥60%): {high_count}</span>')
+                f.write('</div>\n')
+                f.write('</div>\n')
+                f.write('</div>\n')
 
         # Upstream promoter alignment section
         f.write('<div class="alignment-section">\n')

@@ -75,7 +75,6 @@ low_complexity:
 # BLAST query names mapping (filename -> gene name for GFF3)
 blast_queries:
   noeCR34335: noeCR34335
-  noeCR34335v2: noeCR34335
   snoRNAMe18SA1806: snoRNAMe18SA1806
   7SL: 7SL
 
