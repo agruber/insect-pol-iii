@@ -127,20 +127,25 @@ def run_upstream_pipeline(species_name: str, config: Dict, upstream_distance: Op
     if not check_required_files(species_dir, required_files):
         sys.exit(1)
     
-    # Check if genome.tsv exists, if not, generate it
-    genome_tsv = species_dir / "genome.tsv"
+    # Check if genome.tsv exists in cache, if not, generate it
+    cache_dir = Path("cache")
+    cache_dir.mkdir(exist_ok=True)
+    genome_tsv = cache_dir / f"{species_name}.tsv"
+
     if not genome_tsv.exists():
-        print(f"genome.tsv not found, generating it from genome.fna.gz", file=sys.stderr)
-        # Add command to generate genome.tsv at the beginning
+        print(f"Genome lengths not cached, generating {genome_tsv} from genome.fna.gz", file=sys.stderr)
+        # Add command to generate genome.tsv in cache
         genome_fna = species_dir / "genome.fna.gz"
         generate_tsv_cmd = f"zcat {genome_fna} | ./scripts/get_sequence_lengths.py > {genome_tsv}"
-        
+
         # Execute the command to generate genome.tsv
         result = subprocess.run(generate_tsv_cmd, shell=True, capture_output=True, text=True)
         if result.returncode != 0:
-            print(f"Error generating genome.tsv: {result.stderr}", file=sys.stderr)
+            print(f"Error generating genome lengths: {result.stderr}", file=sys.stderr)
             sys.exit(1)
-        print(f"Generated {genome_tsv}", file=sys.stderr)
+        print(f"Generated genome lengths cache: {genome_tsv}", file=sys.stderr)
+    else:
+        print(f"Using cached genome lengths: {genome_tsv}", file=sys.stderr)
     
     # Check for at least one input file type
     tblout_check = list(species_dir.glob("*tblout.gz"))
@@ -218,7 +223,7 @@ def run_upstream_pipeline(species_name: str, config: Dict, upstream_distance: Op
     pipeline_parts.append(filter_cmd)
     
     # 5. Extract upstream regions
-    extract_cmd = f"./scripts/extract_upstream_regions.py -u {upstream_distance} -l {species_dir}/genome.tsv"
+    extract_cmd = f"./scripts/extract_upstream_regions.py -u {upstream_distance} -l {genome_tsv}"
     if upstream_strict:
         extract_cmd += " --strict"
     pipeline_parts.append(extract_cmd)
@@ -331,8 +336,8 @@ def get_promoter_settings(species_name: str, config: Dict) -> Dict:
     # Get full taxonomy for the species
     taxonomy = get_full_taxonomy(species_name)
 
-    # Check taxonomy levels in order of specificity (species -> genus -> family -> order -> suborder -> infraorder -> class)
-    taxonomy_levels = ['species', 'genus', 'family', 'order', 'suborder', 'infraorder', 'class']
+    # Check taxonomy levels in order of specificity (species -> genus -> family -> superfamily -> order -> suborder -> infraorder -> class)
+    taxonomy_levels = ['species', 'genus', 'family', 'superfamily', 'order', 'suborder', 'infraorder', 'class']
 
     for level in taxonomy_levels:
         taxon = taxonomy.get(level)
@@ -439,7 +444,7 @@ def run_annotate_pipeline(species_name: str, config: Dict, input_file: Optional[
     # Show applied settings
     taxonomy = get_full_taxonomy(species_name)
     applied_taxon = None
-    for level in ['species', 'genus', 'family', 'order', 'suborder', 'infraorder', 'class']:
+    for level in ['species', 'genus', 'family', 'superfamily', 'order', 'suborder', 'infraorder', 'class']:
         taxon = taxonomy.get(level)
         if taxon and taxon in config.get('promoter_annotation', {}):
             applied_taxon = f"{level}: {taxon}"

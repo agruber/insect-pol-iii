@@ -85,6 +85,30 @@ promoter_annotation:
     kmers:
       - AATTCTCA
 
+  Calliphoridae:
+    kmers:
+      - RYAATTCYCAT
+    promoter_start: 1
+    promoter_length: 23
+
+  Hippoboscoidea:
+    kmers:
+      - YAATTCTCR
+    promoter_start: 0
+    promoter_length: 20
+
+  Conopidae:
+    kmers:
+      - TATAATTCNY
+    promoter_start: 0
+    promoter_length: 22
+
+  Lauxaniidae:
+    kmers:
+      - 
+    promoter_start: 0
+    promoter_length: 20
+  
   Muscidae:
     kmers:
       - AATTCDCAT

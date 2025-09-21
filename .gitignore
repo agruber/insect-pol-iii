@@ -11,10 +11,11 @@ data/models/*.i1p
 data/models/*.stk
 genomes/*/*.fna
 genomes/*/*.fna.gz
-genomes/*/genome.tsv
 genomes/*/logs/
 genomes/*/upstream.fa
 genomes/*/annotated.fa
+
+cache/
 
 # Testing artifacts
 test_*.fa
