@@ -421,10 +421,32 @@ def run_annotate_pipeline(species_name: str, config: Dict, input_file: Optional[
         cmd_parts.extend(["-l", str(settings['promoter_length'])])
 
     # Add search range if specified
+    # Handle both old format (direct values) and new format (nested with defaults and RNA-specific)
     if 'search_start' in settings:
-        cmd_parts.extend(["-s", str(settings['search_start'])])
+        if isinstance(settings['search_start'], dict):
+            # New nested format
+            if 'default' in settings['search_start']:
+                cmd_parts.extend(["-s", str(settings['search_start']['default'])])
+            # Add RNA-specific parameters
+            for rna_type, value in settings['search_start'].items():
+                if rna_type != 'default':
+                    cmd_parts.extend(["--rna-params", f"{rna_type}:search_start:{value}"])
+        else:
+            # Old format - single value
+            cmd_parts.extend(["-s", str(settings['search_start'])])
+
     if 'search_end' in settings:
-        cmd_parts.extend(["-e", str(settings['search_end'])])
+        if isinstance(settings['search_end'], dict):
+            # New nested format
+            if 'default' in settings['search_end']:
+                cmd_parts.extend(["-e", str(settings['search_end']['default'])])
+            # Add RNA-specific parameters
+            for rna_type, value in settings['search_end'].items():
+                if rna_type != 'default':
+                    cmd_parts.extend(["--rna-params", f"{rna_type}:search_end:{value}"])
+        else:
+            # Old format - single value
+            cmd_parts.extend(["-e", str(settings['search_end'])])
 
     # Add promoter start if specified
     if 'promoter_start' in settings:

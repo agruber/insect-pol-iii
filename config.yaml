@@ -139,9 +139,19 @@ promoter_annotation:
     promoter_length: 21
     promoter_start: 2
 
+  Syrphidae:
+    kmers:
+      - TAYAATTCRCA
+    promoter_length: 18
+    promoter_start: 0
+
   # Default settings if no taxonomic match found
   default:
     promoter_length: 20
     promoter_start: 3
-    search_start: -45
-    search_end: -70
+    search_start:
+      default: -45
+    search_end:
+      default: -70
+      RNase_MRP: -80
+  

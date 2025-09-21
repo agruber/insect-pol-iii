@@ -374,8 +374,31 @@ def main():
                        help='Length of promoter region')
     parser.add_argument('-v', '--verbose', action='store_true',
                        help='Verbose output to stderr')
+    parser.add_argument('--rna-params', action='append', default=[],
+                       help='RNA-specific parameters (format: RNA_type:param:value, e.g., RNase_MRP:search_end:-80)')
 
     args = parser.parse_args()
+
+    # Parse RNA-specific parameters
+    rna_params = {}
+    for param_spec in args.rna_params:
+        try:
+            parts = param_spec.split(':')
+            if len(parts) == 3:
+                rna_type, param_name, param_value = parts
+                if rna_type not in rna_params:
+                    rna_params[rna_type] = {}
+                # Convert numeric values
+                if param_name in ['search_start', 'search_end', 'promoter_shift', 'promoter_length']:
+                    param_value = int(param_value)
+                rna_params[rna_type][param_name] = param_value
+        except ValueError:
+            sys.stderr.write(f"Warning: Invalid RNA parameter specification: {param_spec}\n")
+
+    if args.verbose and rna_params:
+        sys.stderr.write(f"\nRNA-specific parameters:\n")
+        for rna_type, params in rna_params.items():
+            sys.stderr.write(f"  {rna_type}: {params}\n")
 
     # Parse and expand k-mers
     initial_kmers = []
@@ -406,9 +429,33 @@ def main():
     if args.verbose:
         sys.stderr.write(f"\nLoaded {len(sequences)} sequences\n")
 
-    # Find anchor positions
-    anchor_data = find_anchor_positions(sequences, expanded_kmers,
-                                       args.search_start, args.search_end)
+    # Find anchor positions with RNA-specific parameters
+    anchor_data = []
+    for record, seq in zip(seq_records, sequences):
+        # Extract RNA type from header (format: species-number|RNA_type|...)
+        rna_type = None
+        if '|' in record.id:
+            parts = record.id.split('|')
+            if len(parts) >= 2:
+                rna_type = parts[1]
+
+        # Get parameters for this RNA type
+        search_start = args.search_start
+        search_end = args.search_end
+        if rna_type and rna_type in rna_params:
+            if 'search_start' in rna_params[rna_type]:
+                search_start = rna_params[rna_type]['search_start']
+            if 'search_end' in rna_params[rna_type]:
+                search_end = rna_params[rna_type]['search_end']
+
+        # Find anchor for this sequence with its specific parameters
+        found = None
+        for kmer in expanded_kmers:
+            pos = find_kmer_in_region(seq, kmer, search_start, search_end)
+            if pos is not None:
+                found = (pos, kmer)
+                break
+        anchor_data.append(found)
 
     # Count anchored sequences
     anchored_count = sum(1 for data in anchor_data if data is not None)
@@ -516,9 +563,24 @@ def main():
             record = seq_records[seq_idx]
             seq = sequences[seq_idx]
 
+            # Get RNA-specific parameters for this sequence
+            rna_type = None
+            if '|' in record.id:
+                parts = record.id.split('|')
+                if len(parts) >= 2:
+                    rna_type = parts[1]
+
+            search_start = args.search_start
+            search_end = args.search_end
+            if rna_type and rna_type in rna_params:
+                if 'search_start' in rna_params[rna_type]:
+                    search_start = rna_params[rna_type]['search_start']
+                if 'search_end' in rna_params[rna_type]:
+                    search_end = rna_params[rna_type]['search_end']
+
             # Test each HD1 k-mer
             for kmer in all_hd1_kmers:
-                pos = find_kmer_in_region(seq, kmer, args.search_start, args.search_end)
+                pos = find_kmer_in_region(seq, kmer, search_start, search_end)
                 if pos is not None:
                     # Extract promoter region for this k-mer position
                     promoter_start = pos - args.promoter_shift

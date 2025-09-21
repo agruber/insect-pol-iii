@@ -144,7 +144,14 @@ def wrap_sequence_html(seq, line_length=150):
     # Show the full sequence, wrapped at line_length
     wrapped_seq = ""
     for i in range(0, len(seq), line_length):
-        colored_segment = color_nucleotides(seq[i:i+line_length])
+        segment = seq[i:i+line_length]
+        colored_segment = color_nucleotides(segment)
+
+        # If this is the last segment and it's less than 12 nt, add padding
+        if i + line_length >= len(seq) and len(segment) < 12:
+            # Add 6 non-breaking spaces for padding
+            colored_segment += '&nbsp;' * 6
+
         wrapped_seq += colored_segment
         if i + line_length < len(seq):
             wrapped_seq += '\n'
