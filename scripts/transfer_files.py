@@ -39,7 +39,8 @@ def copy_files_from_instance(transfer_file, instance_name, zone, local_base_dir=
     
     success_count = 0
     error_count = 0
-    
+    skipped_count = 0
+
     for remote_path in remote_paths:
         try:
             # Extract the relative path from the remote path
@@ -57,7 +58,14 @@ def copy_files_from_instance(transfer_file, instance_name, zone, local_base_dir=
             # Create local directory structure
             local_file_path = Path(local_base_dir) / relative_path
             local_file_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
+            # Check if file already exists
+            if local_file_path.exists():
+                skipped_count += 1
+                print(f"Skipping {remote_path} -> {local_file_path}")
+                print(f"  ✓ File already exists locally")
+                continue
+
             # Build gcloud scp command
             cmd = [
                 'gcloud', 'compute', 'scp',
@@ -65,12 +73,12 @@ def copy_files_from_instance(transfer_file, instance_name, zone, local_base_dir=
                 str(local_file_path),
                 f'--zone={zone}'
             ]
-            
+
             print(f"Copying {remote_path} -> {local_file_path}")
-            
+
             # Execute the copy command
             result = subprocess.run(cmd, capture_output=True, text=True)
-            
+
             if result.returncode == 0:
                 success_count += 1
                 print(f"  ✓ Success")
@@ -82,7 +90,7 @@ def copy_files_from_instance(transfer_file, instance_name, zone, local_base_dir=
             error_count += 1
             print(f"  ✗ Exception copying {remote_path}: {e}")
     
-    print(f"\nTransfer complete: {success_count} successful, {error_count} errors")
+    print(f"\nTransfer complete: {success_count} downloaded, {skipped_count} skipped (already exist), {error_count} errors")
     return error_count == 0
 
 def main():

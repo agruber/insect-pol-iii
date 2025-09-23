@@ -59,7 +59,7 @@ class TreeNode:
         self.searched_count += searched
     
     def get_status_counts(self, explorer=None):
-        """Get total downloaded and searched counts for this subtree"""
+        """Get total downloaded, searched, and results counts for this subtree"""
         if explorer and hasattr(explorer, 'status_cache'):
             # Use cache for dynamic counting
             return self._get_status_counts_from_cache(explorer)
@@ -67,22 +67,29 @@ class TreeNode:
             # Use pre-computed counts (legacy method)
             downloaded = self.downloaded_count
             searched = self.searched_count
-            
+            results = 0  # Legacy mode doesn't track results
+
             for child in self.children.values():
-                child_downloaded, child_searched = child.get_status_counts(explorer)
+                child_counts = child.get_status_counts(explorer)
+                if len(child_counts) == 3:
+                    child_downloaded, child_searched, child_results = child_counts
+                    results += child_results
+                else:
+                    child_downloaded, child_searched = child_counts
                 downloaded += child_downloaded
                 searched += child_searched
-            
-            return downloaded, searched
+
+            return downloaded, searched, results
     
     def _get_status_counts_from_cache(self, explorer):
         """Calculate status counts dynamically from cache"""
         downloaded = 0
         searched = 0
-        
+        results = 0
+
         # Get all species under this node
         species_list = self._collect_all_species(explorer)
-        
+
         for species_name in species_list:
             cleaned_name = explorer.clean_species_name(species_name)
             if cleaned_name in explorer.status_cache:
@@ -91,8 +98,10 @@ class TreeNode:
                     downloaded += 1
                 if status.get('has_search', False):
                     searched += 1
-        
-        return downloaded, searched
+                if status.get('has_results', False):
+                    results += 1
+
+        return downloaded, searched, results
     
     def _collect_all_species(self, explorer):
         """Collect all species names under this node"""
@@ -118,7 +127,7 @@ class SpeciesTreeExplorer:
         self.df = pd.read_csv(tsv_file, sep='\t', header=None)
         print(f"  ✓ Loaded {len(self.df)} rows in {time.time() - load_start:.2f}s")
         
-        self.levels = ['phylum', 'class', 'order', 'family', 'genus', 'species']
+        self.levels = ['phylum', 'class', 'order', 'suborder', 'infraorder', 'superfamily', 'family', 'genus', 'species']
         self.root = TreeNode("Root", -1)
         self.current_row = 0
         self.display_nodes = []
@@ -164,7 +173,8 @@ class SpeciesTreeExplorer:
             taxonomy = []
             
             # Add taxonomic levels (columns 3-10: phylum to genus)
-            for col_idx in [3, 4, 5, 9, 10]:  # phylum, class, order, family, genus
+            # Columns: 3=phylum, 4=class, 5=order, 6=suborder, 7=infraorder, 8=superfamily, 9=family, 10=genus
+            for col_idx in [3, 4, 5, 6, 7, 8, 9, 10]:
                 value = row.iloc[col_idx]
                 if pd.notna(value) and value != 'NA':
                     taxonomy.append(str(value))
@@ -231,22 +241,26 @@ class SpeciesTreeExplorer:
             counting_start = time.time()
             total_downloaded = 0
             total_searched = 0
-            
+            total_results = 0
+
             for species_name, status in status_data.items():
                 has_genome = status.get('has_genome', False)
                 has_search = status.get('has_search', False)
-                
+                has_results = status.get('has_results', False)
+
                 if has_genome:
                     total_downloaded += 1
                 if has_search:
                     total_searched += 1
-            
+                if has_results:
+                    total_results += 1
+
             print(f"  Counted totals in {time.time() - counting_start:.2f}s")
-            
+
             # Store cache data for dynamic lookups instead of marking tree
             self.status_cache = status_data
             print(f"  Cached status data for dynamic lookups")
-            print(f"  Found {total_downloaded} downloaded genomes, {total_searched} search results")
+            print(f"  Found {total_downloaded} downloaded genomes, {total_searched} search results, {total_results} analysis results")
             return True
             
         except Exception as e:
@@ -314,7 +328,7 @@ class SpeciesTreeExplorer:
         taxonomy = []
         
         # Build taxonomy path same as in build_tree
-        for col_idx in [3, 4, 5, 9, 10]:  # phylum, class, order, family, genus
+        for col_idx in [3, 4, 5, 6, 7, 8, 9, 10]:  # phylum, class, order, suborder, infraorder, superfamily, family, genus
             value = row.iloc[col_idx]
             if pd.notna(value) and value != 'NA':
                 taxonomy.append(str(value))
@@ -483,23 +497,34 @@ class SpeciesTreeExplorer:
             # Format taxon name with translations and status counts
             if not node.is_species:
                 total_count = node.get_species_count()
-                downloaded, searched = node.get_status_counts(self)
-                display_name = format_taxon_display(node.name, total_count)
-                if downloaded > 0 or searched > 0:
-                    display_name += f" [📥{downloaded} 🔍{searched}]"
+                status_counts = node.get_status_counts(self)
+                if len(status_counts) == 3:
+                    downloaded, searched, results = status_counts
+                    display_name = format_taxon_display(node.name, total_count)
+                    if downloaded > 0 or searched > 0 or results > 0:
+                        display_name += f" [📥{downloaded} 🔍{searched} 📊{results}]"
+                else:
+                    downloaded, searched = status_counts
+                    display_name = format_taxon_display(node.name, total_count)
+                    if downloaded > 0 or searched > 0:
+                        display_name += f" [📥{downloaded} 🔍{searched}]"
             else:
                 # For species nodes, show individual status
                 species_name = self.clean_species_name(node.name)
                 species_dir = f"genomes/{species_name}"
+                results_dir = f"results/{species_name}"
                 has_genome = os.path.exists(f"{species_dir}/genome.fna.gz")
                 has_search = os.path.exists(f"{species_dir}/snRNAtRNA.tblout.gz")
-                
+                has_results = os.path.exists(results_dir) and os.path.isdir(results_dir)
+
                 status_icons = ""
                 if has_genome:
                     status_icons += "📥"
                 if has_search:
                     status_icons += "🔍"
-                
+                if has_results:
+                    status_icons += "📊"
+
                 display_name = node.name
                 if status_icons:
                     display_name += f" [{status_icons}]"
@@ -521,7 +546,7 @@ class SpeciesTreeExplorer:
                 print(f"Info: {description}")
         
         print("-" * 80)
-        print("Controls: ↑/↓ navigate, + expand, - collapse, Enter select/deselect, 'i' info, 's' save, 'q' quit")
+        print("Icons: 📥=genomes 🔍=searches 📊=results | Controls: ↑/↓ navigate, + expand, - collapse, Enter select, 'i' info, 's' save, 'q' quit")
     
     def handle_key(self, key):
         """Handle keyboard input"""
@@ -646,6 +671,9 @@ class SpeciesTreeExplorer:
                 print(f"  Phylum: {row.iloc[3]}")
                 print(f"  Class: {row.iloc[4]}")
                 print(f"  Order: {row.iloc[5]}")
+                print(f"  Suborder: {row.iloc[6]}")
+                print(f"  Infraorder: {row.iloc[7]}")
+                print(f"  Superfamily: {row.iloc[8]}")
                 print(f"  Family: {row.iloc[9]}")
                 print(f"  Genus: {row.iloc[10]}")
         else:
@@ -659,14 +687,28 @@ class SpeciesTreeExplorer:
             print(f"Species count: {current_node.get_species_count()}")
             
             # Show status counts
-            downloaded, searched = current_node.get_status_counts(self)
-            print(f"📥 Downloaded genomes: {downloaded}")
-            print(f"🔍 Completed searches: {searched}")
-            if current_node.get_species_count() > 0:
-                download_percent = (downloaded / current_node.get_species_count()) * 100
-                search_percent = (searched / current_node.get_species_count()) * 100
-                print(f"Download progress: {download_percent:.1f}%")
-                print(f"Search progress: {search_percent:.1f}%")
+            status_counts = current_node.get_status_counts(self)
+            if len(status_counts) == 3:
+                downloaded, searched, results = status_counts
+                print(f"📥 Downloaded genomes: {downloaded}")
+                print(f"🔍 Completed searches: {searched}")
+                print(f"📊 Analysis results: {results}")
+                if current_node.get_species_count() > 0:
+                    download_percent = (downloaded / current_node.get_species_count()) * 100
+                    search_percent = (searched / current_node.get_species_count()) * 100
+                    results_percent = (results / current_node.get_species_count()) * 100
+                    print(f"Download progress: {download_percent:.1f}%")
+                    print(f"Search progress: {search_percent:.1f}%")
+                    print(f"Results progress: {results_percent:.1f}%")
+            else:
+                downloaded, searched = status_counts
+                print(f"📥 Downloaded genomes: {downloaded}")
+                print(f"🔍 Completed searches: {searched}")
+                if current_node.get_species_count() > 0:
+                    download_percent = (downloaded / current_node.get_species_count()) * 100
+                    search_percent = (searched / current_node.get_species_count()) * 100
+                    print(f"Download progress: {download_percent:.1f}%")
+                    print(f"Search progress: {search_percent:.1f}%")
             
             print(f"\nDescription:")
             print(f"  {info['description']}")

@@ -1639,7 +1639,31 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
     else:
         print(f"  Warning: PDF generation failed. HTML report available at {html_file}", file=sys.stderr)
 
-    print(f"\nnoeCR34335 lncRNA extraction completed for {species_name}", file=sys.stderr)
+    # Check if lncrna.fa is empty and clean up if needed
+    if output_file.exists():
+        # Count sequences in the FASTA file
+        sequence_count = 0
+        try:
+            for record in SeqIO.parse(output_file, 'fasta'):
+                sequence_count += 1
+                break  # We only need to know if there's at least one sequence
+        except:
+            sequence_count = 0
+
+        if sequence_count == 0:
+            print(f"  Warning: No lncRNA sequences found after filtering", file=sys.stderr)
+            print(f"  Removing empty results directory: {results_dir}", file=sys.stderr)
+            import shutil
+            shutil.rmtree(results_dir)
+            print(f"noeCR34335 lncRNA extraction completed for {species_name} - NO RESULTS (directory removed)", file=sys.stderr)
+        else:
+            print(f"\nnoeCR34335 lncRNA extraction completed for {species_name}", file=sys.stderr)
+    else:
+        print(f"  Error: Output file {output_file} was not created", file=sys.stderr)
+        print(f"  Removing results directory: {results_dir}", file=sys.stderr)
+        import shutil
+        shutil.rmtree(results_dir)
+        print(f"noeCR34335 lncRNA extraction completed for {species_name} - NO RESULTS (directory removed)", file=sys.stderr)
 
 def run_status_pipeline(config: Dict, show_taxonomy: bool = False, show_rare: bool = False,
                         taxonomy_level: str = 'all', species_filter: Optional[str] = None):

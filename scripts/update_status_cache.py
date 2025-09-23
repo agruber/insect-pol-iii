@@ -13,22 +13,22 @@ def clean_species_name(species_name):
     """Convert species name to filesystem-safe format"""
     return species_name.replace(' ', '_').replace('(', '').replace(')', '').replace('/', '_')
 
-def scan_file_status(genomes_dir="genomes"):
-    """Scan genomes directory for file status"""
+def scan_file_status(genomes_dir="genomes", results_dir="results"):
+    """Scan genomes and results directories for file status"""
     status_data = {}
-    
+
     if not os.path.exists(genomes_dir):
         print(f"Warning: {genomes_dir} directory not found")
         return status_data
-    
+
     print(f"Scanning {genomes_dir} directory for file status...")
-    
+
     total_dirs = 0
     for species_name in os.listdir(genomes_dir):
         species_dir = os.path.join(genomes_dir, species_name)
         if os.path.isdir(species_dir):
             total_dirs += 1
-    
+
     processed = 0
     for species_name in sorted(os.listdir(genomes_dir)):
         species_dir = os.path.join(genomes_dir, species_name)
@@ -36,16 +36,21 @@ def scan_file_status(genomes_dir="genomes"):
             processed += 1
             if processed % 200 == 0 or processed == total_dirs:
                 print(f"  Processed {processed}/{total_dirs} species directories...")
-            
+
             # Check for genome and cmsearch results
             genome_file = os.path.join(species_dir, "genome.fna.gz")
             search_results = os.path.join(species_dir, "snRNAtRNA.tblout.gz")
-            
+
+            # Check for results directory entry
+            results_species_dir = os.path.join(results_dir, species_name)
+            has_results = os.path.exists(results_species_dir) and os.path.isdir(results_species_dir)
+
             status_data[species_name] = {
                 'has_genome': os.path.exists(genome_file) and os.path.islink(genome_file),
-                'has_search': os.path.exists(search_results)
+                'has_search': os.path.exists(search_results),
+                'has_results': has_results
             }
-    
+
     return status_data
 
 def save_status_cache(status_data, cache_file="data/file_status_cache.json"):
@@ -68,25 +73,29 @@ def save_status_cache(status_data, cache_file="data/file_status_cache.json"):
 def main():
     genomes_dir = sys.argv[1] if len(sys.argv) > 1 else "genomes"
     cache_file = sys.argv[2] if len(sys.argv) > 2 else "data/file_status_cache.json"
-    
+    results_dir = sys.argv[3] if len(sys.argv) > 3 else "results"
+
     print("File Status Cache Update")
     print("="*40)
     print(f"Genomes directory: {genomes_dir}")
+    print(f"Results directory: {results_dir}")
     print(f"Cache file: {cache_file}")
     print()
-    
+
     # Scan file status
-    status_data = scan_file_status(genomes_dir)
+    status_data = scan_file_status(genomes_dir, results_dir)
     
     # Calculate summary
     total_species = len(status_data)
     total_downloaded = sum(1 for s in status_data.values() if s['has_genome'])
     total_searched = sum(1 for s in status_data.values() if s['has_search'])
-    
+    total_results = sum(1 for s in status_data.values() if s['has_results'])
+
     print(f"\nSummary:")
     print(f"  Total species directories: {total_species}")
     print(f"  Downloaded genomes: {total_downloaded}")
     print(f"  cmsearch results: {total_searched}")
+    print(f"  Analysis results: {total_results}")
     
     # Save cache
     save_status_cache(status_data, cache_file)
