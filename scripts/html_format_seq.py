@@ -64,7 +64,8 @@ def load_lncrna_stats(stats_file):
                             'has_3prime_motif': parts[2],
                             'longest_polyt': parts[3],
                             'trailing_t': parts[4],
-                            'motif_type': parts[5] if len(parts) > 5 else 'none'
+                            'motif_5prime_type': parts[5] if len(parts) > 5 else 'none',
+                            'motif_3prime_type': parts[6] if len(parts) > 6 else 'none'
                         }
     except:
         pass
@@ -225,19 +226,17 @@ def main():
 
                 # 5' motif
                 if stats['has_5prime_motif'] == '1':
-                    motif_type = stats.get('motif_type', 'GCGGT')
-                    if motif_type == 'GTGGT':
-                        metadata_items.append('<span class="metadata-item"><span class="status-ok">✓</span> GTGGT (5\')</span>')
-                    else:
-                        metadata_items.append('<span class="metadata-item"><span class="status-ok">✓</span> GCGGT (5\')</span>')
+                    motif_5prime_type = stats.get('motif_5prime_type', 'GCGGT')
+                    metadata_items.append(f'<span class="metadata-item">5\' motif: {motif_5prime_type}</span>')
                 else:
-                    metadata_items.append('<span class="metadata-item">✗ GCGGT/GTGGT (5\')</span>')
+                    metadata_items.append('<span class="metadata-item">5\' motif: ✗</span>')
 
                 # 3' motif
                 if stats['has_3prime_motif'] == '1':
-                    metadata_items.append('<span class="metadata-item"><span class="status-ok">✓</span> ATCGC (3\')</span>')
+                    motif_3prime_type = stats.get('motif_3prime_type', 'ATCGC')
+                    metadata_items.append(f'<span class="metadata-item">3\' motif: {motif_3prime_type}</span>')
                 else:
-                    metadata_items.append('<span class="metadata-item">✗ ATCGC (3\')</span>')
+                    metadata_items.append('<span class="metadata-item">3\' motif: ✗</span>')
 
                 # Poly-T info
                 metadata_items.append(f'<span class="metadata-item">Internal max. Poly-T: {stats["longest_polyt"]}nt</span>')

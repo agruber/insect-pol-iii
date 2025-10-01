@@ -705,7 +705,50 @@ def get_assembly_name(species_name: str) -> str:
     except:
         return "Unknown assembly"
 
-def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Optional[str] = None):
+def trim_polyt_proper(sequence):
+    """
+    Properly trim polyT from 3' end, including cases like ...ATCGCATTTTTT.
+
+    Steps:
+    1. Trim trailing Ts
+    2. If there's a single non-T at the end, check if there are Ts before it
+    3. If yes, remove the non-T and continue trimming
+    4. Repeat until sequence ends with multiple non-Ts or is all Ts
+
+    Args:
+        sequence: The sequence string (uppercase)
+
+    Returns:
+        Trimmed sequence
+    """
+    seq = sequence
+
+    while len(seq) > 0:
+        # Remove trailing Ts
+        seq_no_t = seq.rstrip('T')
+
+        if len(seq_no_t) == 0:
+            # All Ts - return empty or the string based on preference
+            return seq_no_t
+
+        if len(seq_no_t) == len(seq):
+            # No trailing Ts - we're done
+            return seq
+
+        # We removed some Ts. Now check if there's a single non-T at the end
+        # If the last character is not T and there are Ts before it, remove it and continue
+        if len(seq_no_t) >= 2 and seq_no_t[-1] != 'T' and seq_no_t[-2] == 'T':
+            # Pattern like ...TN (where N is the last non-T)
+            # Remove the last non-T and continue
+            seq = seq_no_t[:-1]
+        else:
+            # Either ends with multiple non-Ts or just one non-T with no Ts before
+            # We're done
+            return seq_no_t
+
+    return seq
+
+def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Optional[str] = None, strict: bool = False):
     """Extract noeCR34335 lncRNA hits with promoter annotations for publication"""
 
     species_dir = Path("genomes") / species_name
@@ -881,7 +924,11 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
     temp_output = tempfile.mktemp(suffix='.fa')
     incomplete_file = results_dir / 'lncrna.incomplete'
     extended_file = results_dir / 'lncrna.extended'
-    extract_cmd = f"./scripts/extract_with_polyt_extension.py -g {genome_file} -s {species_name} --incomplete {incomplete_file} --extended {extended_file} < {filtered_gff} > {temp_output}"
+
+    # Get max_polyt_extension from config, default to 2000
+    max_extension = config.get('max_polyt_extension', 2000)
+
+    extract_cmd = f"./scripts/extract_with_polyt_extension.py -g {genome_file} -s {species_name} --incomplete {incomplete_file} --extended {extended_file} --max-extension {max_extension} < {filtered_gff} > {temp_output}"
 
     result = subprocess.run(extract_cmd, shell=True, capture_output=True, text=True)
     if result.returncode != 0:
@@ -922,6 +969,135 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
 
     print(f"  Using {len(blast_to_id_mapping)} coordinate mappings for ID replacement", file=sys.stderr)
 
+    # Apply strict filtering if requested
+    strict_excluded_ids = set()  # Track IDs excluded by strict filtering
+    if strict:
+        # Load 3' motifs from config
+        motifs_3prime = config.get('motifs', {}).get('3prime', ['ATCGC', 'ACCGC', 'ATCAC'])
+        motifs_str = '/'.join(motifs_3prime)
+
+        print(f"  Applying strict filtering: excluding extended sequences without {motifs_str} motif and incomplete sequences...", file=sys.stderr)
+        # Read extended sequence IDs that need validation
+        extended_sequences = set()
+        if extended_file.exists():
+            with open(extended_file, 'r') as f:
+                for line in f:
+                    seq_id = line.strip()
+                    if seq_id:
+                        extended_sequences.add(seq_id)
+
+        # Read incomplete sequence IDs that should be excluded in strict mode
+        incomplete_sequences = set()
+        if incomplete_file.exists():
+            with open(incomplete_file, 'r') as f:
+                for line in f:
+                    seq_id = line.strip()
+                    if seq_id:
+                        incomplete_sequences.add(seq_id)
+
+        # Create a temporary file for strict filtering
+        temp_strict_output = tempfile.mktemp(suffix='.fa')
+        strict_filtered_count = 0
+        strict_excluded_count = 0
+
+        with open(temp_output, 'r') as infile, open(temp_strict_output, 'w') as outfile:
+            current_header = None
+            current_sequence = []
+
+            for line in infile:
+                if line.startswith('>'):
+                    # Process previous sequence if any
+                    if current_header and current_sequence:
+                        sequence = ''.join(current_sequence)
+                        should_keep = True
+
+                        # Check if this is an extended sequence
+                        header_id = current_header[1:].split('|')[0]  # Extract ID from header
+
+                        # Exclude incomplete sequences in strict mode
+                        if header_id in incomplete_sequences:
+                            should_keep = False
+                            strict_excluded_count += 1
+                            # Add old ID to exclusion set (will be mapped later)
+                            strict_excluded_ids.add(header_id)
+                            print(f"    Excluded {header_id}: incomplete sequence (no polyT termination)", file=sys.stderr)
+
+                        elif header_id in extended_sequences:
+                            # Properly trim polyT and check for 3' motif in last 12nt
+                            seq_upper = sequence.upper()
+                            seq_no_polyt = trim_polyt_proper(seq_upper)
+                            # Add 1 T back to detect motifs ending in T (like ATCGT)
+                            seq_for_motif_check = seq_no_polyt + 'T'
+                            # Check last 12nt for any of the configured 3' motifs
+                            last_12nt = seq_for_motif_check[-12:] if len(seq_for_motif_check) >= 12 else seq_for_motif_check
+                            has_motif = any(motif in last_12nt for motif in motifs_3prime)
+                            if not has_motif:
+                                should_keep = False
+                                strict_excluded_count += 1
+                                # Add old ID to exclusion set (will be mapped later)
+                                strict_excluded_ids.add(header_id)
+                                print(f"    Excluded {header_id}: no {motifs_str} in last 12nt after removing polyT: {last_12nt}", file=sys.stderr)
+
+                        if should_keep:
+                            outfile.write(current_header + '\n')
+                            outfile.write(sequence + '\n')
+                            strict_filtered_count += 1
+
+                    # Start new sequence
+                    current_header = line.strip()
+                    current_sequence = []
+                else:
+                    current_sequence.append(line.strip())
+
+            # Process last sequence
+            if current_header and current_sequence:
+                sequence = ''.join(current_sequence)
+                should_keep = True
+
+                # Check if this is an extended sequence
+                header_id = current_header[1:].split('|')[0]  # Extract ID from header
+
+                # Exclude incomplete sequences in strict mode
+                if header_id in incomplete_sequences:
+                    should_keep = False
+                    strict_excluded_count += 1
+                    # Add old ID to exclusion set (will be mapped later)
+                    strict_excluded_ids.add(header_id)
+                    print(f"    Excluded {header_id}: incomplete sequence (no polyT termination)", file=sys.stderr)
+
+                elif header_id in extended_sequences:
+                    # Properly trim polyT and check for 3' motif in last 12nt
+                    seq_upper = sequence.upper()
+                    seq_no_polyt = trim_polyt_proper(seq_upper)
+                    # Add 1 T back to detect motifs ending in T (like ATCGT)
+                    seq_for_motif_check = seq_no_polyt + 'T'
+                    # Check last 12nt for any of the configured 3' motifs
+                    last_12nt = seq_for_motif_check[-12:] if len(seq_for_motif_check) >= 12 else seq_for_motif_check
+                    has_motif = any(motif in last_12nt for motif in motifs_3prime)
+                    if not has_motif:
+                        should_keep = False
+                        strict_excluded_count += 1
+                        # Add old ID to exclusion set (will be mapped later)
+                        strict_excluded_ids.add(header_id)
+                        print(f"    Excluded {header_id}: no {motifs_str} in last 12nt after removing polyT: {last_12nt}", file=sys.stderr)
+
+                if should_keep:
+                    outfile.write(current_header + '\n')
+                    outfile.write(sequence + '\n')
+                    strict_filtered_count += 1
+
+        print(f"  Strict filtering: kept {strict_filtered_count}, excluded {strict_excluded_count} extended sequences", file=sys.stderr)
+
+        # Replace temp_output with strict filtered version
+        try:
+            os.unlink(temp_output)
+        except:
+            pass
+        temp_output = temp_strict_output
+
+    # Build mapping from old IDs to new IDs while rewriting the file
+    old_to_new_id_mapping = {}
+
     with open(temp_output, 'r') as infile, open(output_file, 'w') as outfile:
         for line in infile:
             if line.startswith('>'):
@@ -931,6 +1107,7 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
                 if '|' in header:
                     parts = header[1:].split('|')
                     if len(parts) >= 6:
+                        old_id = parts[0]  # Save old ID
                         chrom = parts[2]
                         start = int(parts[3])
                         end = int(parts[4])
@@ -971,6 +1148,7 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
                                 continue
 
                         if matched_id:
+                            old_to_new_id_mapping[old_id] = matched_id  # Save mapping
                             outfile.write(f">{matched_id}|noeCR34335|{chrom}|{start}|{end}|{strand}\n")
                         else:
                             outfile.write(line)
@@ -993,18 +1171,14 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
     if incomplete_file.exists():
         print(f"  Updating incomplete sequence IDs...", file=sys.stderr)
         updated_incomplete = []
+
         with open(incomplete_file, 'r') as f:
             for line in f:
-                original_id = line.strip()
-                if original_id:
-                    # Extract the sequence number from the original ID (e.g., "Drosophila_burlai-1" -> "1")
-                    if '-' in original_id:
-                        seq_num = original_id.split('-')[-1]
-                        # Find the corresponding new ID
-                        new_id = f"{species_abbrev}{seq_num}"
-                        updated_incomplete.append(new_id)
-                    else:
-                        updated_incomplete.append(original_id)
+                old_id = line.strip()
+                if old_id:
+                    # Look up the new ID from the mapping we just created
+                    new_id = old_to_new_id_mapping.get(old_id, old_id)
+                    updated_incomplete.append(new_id)
 
         # Write updated incomplete file
         with open(incomplete_file, 'w') as f:
@@ -1016,18 +1190,14 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
     if extended_file.exists():
         print(f"  Updating extended sequence IDs...", file=sys.stderr)
         updated_extended = []
+
         with open(extended_file, 'r') as f:
             for line in f:
-                original_id = line.strip()
-                if original_id:
-                    # Extract the sequence number from the original ID (e.g., "Drosophila_emarginata-1" -> "1")
-                    if '-' in original_id:
-                        seq_num = original_id.split('-')[-1]
-                        # Find the corresponding new ID
-                        new_id = f"{species_abbrev}{seq_num}"
-                        updated_extended.append(new_id)
-                    else:
-                        updated_extended.append(original_id)
+                old_id = line.strip()
+                if old_id:
+                    # Look up the new ID from the mapping we created earlier
+                    new_id = old_to_new_id_mapping.get(old_id, old_id)
+                    updated_extended.append(new_id)
 
         # Write updated extended file
         with open(extended_file, 'w') as f:
@@ -1045,8 +1215,12 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
         coord_to_id[(chrom, start, end, strand)] = f"{species_abbrev}{counter}"
 
     # Write sequences in 2-line format to match original
+    upstream_sequences_written = 0
     with open(upstream_output, 'w') as f:
         for record in upstream_with_promoters:
+            should_write = True
+            header_to_write = None
+
             # Check if this is a noeCR34335 hit and update ID
             if "noeCR34335" in record.id:
                 parts = record.id.split('|')
@@ -1057,17 +1231,57 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
                     strand = parts[5]
                     new_id = coord_to_id.get((chrom, start, end, strand), None)
                     if new_id:
-                        # Create new header with updated ID but keeping noeCR34335 as gene type
-                        f.write(f">{new_id}|noeCR34335|{chrom}|{start}|{end}|{strand}\n")
-                    else:
-                        f.write(f">{record.id}\n")
-                else:
-                    f.write(f">{record.id}\n")
-            else:
-                f.write(f">{record.id}\n")
-            f.write(f"{str(record.seq)}\n")
+                        # Check if this sequence was excluded by strict filtering
+                        # We need to check if any excluded old ID would map to this new_id by checking coordinates
+                        is_excluded = False
+                        if strict:
+                            # Find the ncRNA coordinates that correspond to this upstream region
+                            # Upstream is CM025933.1:21374518-21374617(+)
+                            # ncRNA is CM025933.1:21374618-21374678(+) (starts right after upstream)
+                            for coord_key in blast_to_id_mapping:
+                                if blast_to_id_mapping[coord_key] == new_id:
+                                    # This ncRNA maps to new_id, now check if any excluded old_id has these coordinates
+                                    # We stored old IDs in strict_excluded_ids, but they don't have coordinates
+                                    # We need to check the incomplete file which was read before updating IDs
+                                    # Actually, simpler: just check if new_id maps to any excluded sequence
+                                    # by checking if old_to_new_id_mapping has the reverse mapping
+                                    for old_id in strict_excluded_ids:
+                                        if old_to_new_id_mapping.get(old_id) == new_id:
+                                            is_excluded = True
+                                            break
+                                    # If old_id not in mapping (because excluded before mapping), check by matching coord
+                                    if not is_excluded:
+                                        # Check if this coord is for an excluded sequence by checking if
+                                        # the sequence with these coords was excluded
+                                        # Since excluded sequences aren't in old_to_new_id_mapping, we need another way
+                                        # The excluded ID is like "Drosophila_subpulchrella-4" which doesn't have coords
+                                        # But we know new_id from coord_to_id mapping
+                                        # So if there are N total sequences and M kept, check if new_id counter is in excluded range
+                                        # Actually simpler: just check all values in old_to_new_id_mapping
+                                        # If new_id is NOT in the values, it means it was excluded
+                                        if new_id not in old_to_new_id_mapping.values():
+                                            is_excluded = True
+                                    break
 
-    print(f"  Wrote {len(upstream_with_promoters)} upstream sequences with promoters to {upstream_output}", file=sys.stderr)
+                        if is_excluded:
+                            print(f"    Excluding upstream sequence for {new_id} (sequence was filtered out)", file=sys.stderr)
+                            should_write = False
+                        else:
+                            # Create new header with updated ID but keeping noeCR34335 as gene type
+                            header_to_write = f">{new_id}|noeCR34335|{chrom}|{start}|{end}|{strand}\n"
+                    else:
+                        header_to_write = f">{record.id}\n"
+                else:
+                    header_to_write = f">{record.id}\n"
+            else:
+                header_to_write = f">{record.id}\n"
+
+            if should_write:
+                f.write(header_to_write)
+                f.write(f"{str(record.seq)}\n")
+                upstream_sequences_written += 1
+
+    print(f"  Wrote {upstream_sequences_written} upstream sequences with promoters to {upstream_output}", file=sys.stderr)
 
     # Score noeCR34335 promoters using new PWM scoring script
     score_output = results_dir / "upstream.score"
@@ -1081,9 +1295,9 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
         print(f"  Warning: PWM scoring failed: {pwm_result.stderr}", file=sys.stderr)
         result = pwm_result
     else:
-        # Extract noeCR34335 lines and filter by Pol III score >= 0.7
+        # Extract noeCR34335 lines and filter by Pol III score threshold from config
         filtered_ids = set()  # Track IDs that pass the filter
-        pol3_threshold = 0.7
+        pol3_threshold = config.get('pse_score_cutoff', 0.8)
 
         with open(score_output, 'w') as f:
             f.write("ID\tSequence\tPol2_Score\tPol3_Score\n")
@@ -1162,11 +1376,14 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
     else:
         print(f"  Wrote promoter scores to {score_output}", file=sys.stderr)
 
-    # Step 9: Additional filtering - Check if genomic RNA sequences start with G+[TC]G+TC pattern
-    print(f"\n  Checking genomic RNA sequences for G+[TC]G+TC pattern...", file=sys.stderr)
+    # Step 9: Additional filtering - Check if genomic RNA sequences start with G* followed by 5' motif pattern
+    # Load 5' motifs from config
+    motifs_5prime = config.get('motifs', {}).get('5prime', ['GCGGT', 'GTGGT'])
+    motifs_pattern = '|'.join(motifs_5prime)
+    print(f"\n  Checking genomic RNA sequences for G*({motifs_pattern}) pattern...", file=sys.stderr)
     import re
     from Bio import SeqIO
-    pattern = re.compile(r'^G+[TC]G+T[TC]', re.IGNORECASE)
+    pattern = re.compile(rf'^G*({motifs_pattern})', re.IGNORECASE)
 
     sequences_to_keep = []
     sequences_removed = []
@@ -1180,7 +1397,7 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
             else:
                 sequences_removed.append(record.id)
                 # Print red warning
-                print(f"    \033[91mWARNING: Removing {record.id} - sequence does not match /^G+[TC]G+T[TC]/ pattern\033[0m", file=sys.stderr)
+                print(f"    \033[91mWARNING: Removing {record.id} - sequence does not match /^G*({motifs_pattern})/ pattern\033[0m", file=sys.stderr)
                 print(f"    \033[91m         Sequence starts with: {seq_str[:50]}...\033[0m", file=sys.stderr)
 
         # Rewrite lncrna.fa with only sequences that match the pattern
@@ -1208,10 +1425,10 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
                 with open(upstream_output, 'w') as f:
                     SeqIO.write(upstream_to_keep, f, 'fasta')
 
-            print(f"  Filtered out {len(sequences_removed)} sequences not matching G+CG+TC pattern", file=sys.stderr)
+            print(f"  Filtered out {len(sequences_removed)} sequences not matching G*({motifs_pattern}) pattern", file=sys.stderr)
             print(f"  Kept {len(sequences_to_keep)} sequences in lncrna.fa", file=sys.stderr)
         else:
-            print(f"  All sequences match the G+[TC]G+TC pattern", file=sys.stderr)
+            print(f"  All sequences match the G*({motifs_pattern}) pattern", file=sys.stderr)
 
     # Clean up temporary files
     try:
@@ -1349,8 +1566,7 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
         .taxonomic-lineage {
             font-size: 8pt;
             margin-bottom: 6px;
-            color: #666;
-            font-style: italic;
+            color: #444;
         }
 
         /* Compact sequence container */
@@ -1541,7 +1757,6 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
             if identities_data and len(seq_ids) <= 10:
                 # For 10 or fewer sequences, show a compact matrix
                 f.write('<div style="margin: 10px 0;">\n')
-                f.write('<h3 style="font-size:11pt;margin-bottom:5px;">Pairwise Identity Matrix (%)</h3>\n')
                 f.write('<table style="border-collapse:collapse;font-size:9px;">\n')
 
                 # Header row
@@ -1564,22 +1779,18 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
                                 # Missing comparison
                                 f.write('<td style="border:1px solid #ddd;padding:3px;text-align:center;background:#f0f0f0;">n/a</td>')
                             else:
-                                # Color code based on identity level
-                                if identity >= 80:
-                                    color = "#4CAF50"  # Green
-                                elif identity >= 50:
-                                    color = "#FFA500"  # Orange
-                                else:
-                                    color = "#f44336"  # Red
-                                f.write(f'<td style="border:1px solid #ddd;padding:3px;text-align:center;">')
-                                f.write(f'<span style="background-color:{color};color:white;padding:1px 3px;border-radius:2px;font-size:8px;">')
-                                f.write(f'{identity:.0f}</span></td>')
+                                # Show identity value without color coding
+                                f.write(f'<td style="border:1px solid #ddd;padding:3px;text-align:center;font-size:8px;">')
+                                f.write(f'{identity:.0f}</td>')
                         else:
                             # Lower triangle - empty
                             f.write('<td style="border:1px solid #ddd;padding:3px;background:#f9f9f9;"></td>')
                     f.write('</tr>\n')
 
                 f.write('</table>\n')
+                f.write('<div style="font-size:7pt;margin-top:3px;color:#333;">\n')
+                f.write('Pairwise sequence identity matrix (%) showing similarity between lncRNA sequences.\n')
+                f.write('</div>\n')
                 f.write('</div>\n')
 
             elif identities_data:
@@ -1601,16 +1812,15 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
                 f.write(f'<div><strong>Comparisons:</strong> {len(identities_data)}</div>\n')
                 f.write(f'<div><strong>Identity range:</strong> {min_identity:.1f}% - {max_identity:.1f}% (avg: {avg_identity:.1f}%)</div>\n')
                 f.write('<div><strong>Distribution:</strong> ')
-                f.write(f'<span style="color:#f44336;">Low (&lt;30%): {low_count}</span> | ')
-                f.write(f'<span style="color:#FFA500;">Medium (30-60%): {med_count}</span> | ')
-                f.write(f'<span style="color:#4CAF50;">High (≥60%): {high_count}</span>')
+                f.write(f'Low (&lt;30%): {low_count} | ')
+                f.write(f'Medium (30-60%): {med_count} | ')
+                f.write(f'High (≥60%): {high_count}')
                 f.write('</div>\n')
                 f.write('</div>\n')
                 f.write('</div>\n')
 
         # Upstream promoter alignment section
         f.write('<div class="alignment-section">\n')
-        f.write("<h2>Upstream promoter alignment</h2>\n")
         f.write('<pre class="alignment">\n')
 
         # Format ALL upstream sequences in ClustalW-like alignment format
@@ -1624,6 +1834,19 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
                 f.write("Error formatting upstream alignment\n")
 
         f.write("</pre>\n")
+
+        # Generate description of Pol II and Pol III types from config
+        pol2_types = config.get('rna_polymerases', {}).get('pol2', {}).get('types', [])
+        pol3_types = config.get('rna_polymerases', {}).get('pol3', {}).get('types', [])
+
+        f.write('<div style="font-size:7pt;margin-top:3px;color:#333;">\n')
+        f.write('Upstream promoter alignment showing conserved regions. ')
+        if pol3_types:
+            f.write(f'Sequences include Pol III promoters ({", ".join(pol3_types)}) ')
+        if pol2_types:
+            f.write(f'and Pol II promoters ({", ".join(pol2_types)}). ')
+        f.write('Conserved positions are highlighted in the alignment.\n')
+        f.write('</div>\n')
         f.write("</div>\n")
 
         f.write("</body>\n</html>\n")
@@ -1822,6 +2045,8 @@ The pipeline will:
                        help='Minimum score for promoter predictions (for screen command, default: 0.8)')
     parser.add_argument('--eval', action='store_true',
                        help='Evaluate multiple thresholds for promoterwindow command')
+    parser.add_argument('--strict', action='store_true',
+                       help='Filter out extended sequences without ATCGC motif (for noeCR34335 command)')
 
     args = parser.parse_args()
 
@@ -1915,7 +2140,8 @@ The pipeline will:
             run_noeCR34335_pipeline(
                 args.species,
                 config,
-                output_file=args.output
+                output_file=args.output,
+                strict=args.strict
             )
 
     if len(commands) > 1:

@@ -42,8 +42,8 @@ def run_needle(seq1_file, seq2_file):
             content = f.read()
 
         # Look for the Identity line in needle output
-        # Format: # Identity:     123/456 (27.0%)
-        identity_match = re.search(r'# Identity:\s+\d+/\d+\s+\((\d+\.?\d*)\%\)', content)
+        # Format: # Identity:     123/456 (27.0%) or # Identity:     123/456 ( 8.9%)
+        identity_match = re.search(r'# Identity:\s+\d+/\d+\s+\(\s*(\d+\.?\d*)\s*%\)', content)
 
         if identity_match:
             return float(identity_match.group(1))

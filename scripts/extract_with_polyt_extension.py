@@ -145,7 +145,7 @@ def create_fasta_header(feature, seq_length, species_name, feature_counter, new_
     end = new_end if new_end is not None else feature.end
     return f"{species_name}-{feature_counter}|{feature.type}|{feature.seqid}|{start}|{end}|{feature.strand}"
 
-def process_gff3_with_extension(gff3_input, genome_dict, output_handle, species_name, incomplete_file=None, extended_file=None):
+def process_gff3_with_extension(gff3_input, genome_dict, output_handle, species_name, incomplete_file=None, extended_file=None, max_extension=1000):
     """Process GFF3 file and extract sequences with poly-T extension"""
     features_processed = 0
     sequences_extracted = 0
@@ -188,7 +188,7 @@ def process_gff3_with_extension(gff3_input, genome_dict, output_handle, species_
         genome_seq = genome_dict[feature.seqid].seq
 
         # Extract sequence with poly-T extension
-        sequence, was_extended, new_start, new_end = extend_sequence_to_polyt(feature, genome_seq)
+        sequence, was_extended, new_start, new_end = extend_sequence_to_polyt(feature, genome_seq, max_extension)
 
         if sequence is not None:
             # Create FASTA header with potentially extended coordinates
@@ -249,6 +249,8 @@ Examples:
                        help='Output file for incomplete sequence IDs (sequences without poly-T termination)')
     parser.add_argument('--extended',
                        help='Output file for extended sequence IDs (sequences that were extended to find poly-T)')
+    parser.add_argument('--max-extension', type=int, default=1000,
+                       help='Maximum distance to extend searching for poly-T termination signal (default: 1000)')
 
     args = parser.parse_args()
 
@@ -263,7 +265,7 @@ Examples:
         # Determine input source
         input_source = args.features if args.features else sys.stdin
         # Process GFF3 and extract sequences
-        process_gff3_with_extension(input_source, genome_dict, output_handle, args.species, args.incomplete, args.extended)
+        process_gff3_with_extension(input_source, genome_dict, output_handle, args.species, args.incomplete, args.extended, args.max_extension)
     finally:
         if args.output:
             output_handle.close()
