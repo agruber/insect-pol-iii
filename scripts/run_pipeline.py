@@ -972,11 +972,12 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
     # Apply strict filtering if requested
     strict_excluded_ids = set()  # Track IDs excluded by strict filtering
     if strict:
-        # Load 3' motifs from config
+        # Load motifs from config
+        motifs_5prime = config.get('motifs', {}).get('5prime', ['GCGGT', 'GTGGT'])
         motifs_3prime = config.get('motifs', {}).get('3prime', ['ATCGC', 'ACCGC', 'ATCAC'])
         motifs_str = '/'.join(motifs_3prime)
 
-        print(f"  Applying strict filtering: excluding extended sequences without {motifs_str} motif and incomplete sequences...", file=sys.stderr)
+        print(f"  Applying strict filtering: excluding sequences without compatible motif pairs and incomplete sequences...", file=sys.stderr)
         # Read extended sequence IDs that need validation
         extended_sequences = set()
         if extended_file.exists():
@@ -1022,21 +1023,50 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
                             strict_excluded_ids.add(header_id)
                             print(f"    Excluded {header_id}: incomplete sequence (no polyT termination)", file=sys.stderr)
 
-                        elif header_id in extended_sequences:
-                            # Properly trim polyT and check for 3' motif in last 12nt
+                        # Check motif compatibility for ALL sequences
+                        if should_keep:
                             seq_upper = sequence.upper()
-                            seq_no_polyt = trim_polyt_proper(seq_upper)
-                            # Add 1 T back to detect motifs ending in T (like ATCGT)
-                            seq_for_motif_check = seq_no_polyt + 'T'
+
+                            # Check for 5' motif in first 10 nt
+                            first_10nt = seq_upper[:min(10, len(seq_upper))]
+                            motif_5prime_found = None
+                            for motif_5 in motifs_5prime:
+                                if motif_5 in first_10nt:
+                                    motif_5prime_found = motif_5
+                                    break
+
+                            # For extended sequences, trim polyT properly
+                            if header_id in extended_sequences:
+                                seq_no_polyt = trim_polyt_proper(seq_upper)
+                                seq_for_motif_check = seq_no_polyt + 'T'
+                            else:
+                                # For non-extended sequences, just trim trailing T's
+                                seq_for_motif_check = seq_upper.rstrip('T') + 'T'
+
                             # Check last 12nt for any of the configured 3' motifs
                             last_12nt = seq_for_motif_check[-12:] if len(seq_for_motif_check) >= 12 else seq_for_motif_check
-                            has_motif = any(motif in last_12nt for motif in motifs_3prime)
-                            if not has_motif:
-                                should_keep = False
-                                strict_excluded_count += 1
-                                # Add old ID to exclusion set (will be mapped later)
-                                strict_excluded_ids.add(header_id)
-                                print(f"    Excluded {header_id}: no {motifs_str} in last 12nt after removing polyT: {last_12nt}", file=sys.stderr)
+                            motif_3prime_found = None
+                            for motif_3 in motifs_3prime:
+                                if motif_3 in last_12nt:
+                                    motif_3prime_found = motif_3
+                                    break
+
+                            # If 5' motif is found, 3' motif must also be found and compatible
+                            if motif_5prime_found:
+                                if not motif_3prime_found:
+                                    should_keep = False
+                                    strict_excluded_count += 1
+                                    strict_excluded_ids.add(header_id)
+                                    print(f"    Excluded {header_id}: has 5' motif {motif_5prime_found} but no compatible 3' motif in last 12nt: {last_12nt}", file=sys.stderr)
+                                else:
+                                    # Check motif compatibility
+                                    compatibility = config.get('motifs', {}).get('compatibility', {})
+                                    compatible_3prime = compatibility.get(motif_5prime_found, [])
+                                    if motif_3prime_found not in compatible_3prime:
+                                        should_keep = False
+                                        strict_excluded_count += 1
+                                        strict_excluded_ids.add(header_id)
+                                        print(f"    Excluded {header_id}: incompatible motif pair {motif_5prime_found} + {motif_3prime_found}", file=sys.stderr)
 
                         if should_keep:
                             outfile.write(current_header + '\n')
@@ -1065,21 +1095,50 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
                     strict_excluded_ids.add(header_id)
                     print(f"    Excluded {header_id}: incomplete sequence (no polyT termination)", file=sys.stderr)
 
-                elif header_id in extended_sequences:
-                    # Properly trim polyT and check for 3' motif in last 12nt
+                # Check motif compatibility for ALL sequences
+                if should_keep:
                     seq_upper = sequence.upper()
-                    seq_no_polyt = trim_polyt_proper(seq_upper)
-                    # Add 1 T back to detect motifs ending in T (like ATCGT)
-                    seq_for_motif_check = seq_no_polyt + 'T'
+
+                    # Check for 5' motif in first 10 nt
+                    first_10nt = seq_upper[:min(10, len(seq_upper))]
+                    motif_5prime_found = None
+                    for motif_5 in motifs_5prime:
+                        if motif_5 in first_10nt:
+                            motif_5prime_found = motif_5
+                            break
+
+                    # For extended sequences, trim polyT properly
+                    if header_id in extended_sequences:
+                        seq_no_polyt = trim_polyt_proper(seq_upper)
+                        seq_for_motif_check = seq_no_polyt + 'T'
+                    else:
+                        # For non-extended sequences, just trim trailing T's
+                        seq_for_motif_check = seq_upper.rstrip('T') + 'T'
+
                     # Check last 12nt for any of the configured 3' motifs
                     last_12nt = seq_for_motif_check[-12:] if len(seq_for_motif_check) >= 12 else seq_for_motif_check
-                    has_motif = any(motif in last_12nt for motif in motifs_3prime)
-                    if not has_motif:
-                        should_keep = False
-                        strict_excluded_count += 1
-                        # Add old ID to exclusion set (will be mapped later)
-                        strict_excluded_ids.add(header_id)
-                        print(f"    Excluded {header_id}: no {motifs_str} in last 12nt after removing polyT: {last_12nt}", file=sys.stderr)
+                    motif_3prime_found = None
+                    for motif_3 in motifs_3prime:
+                        if motif_3 in last_12nt:
+                            motif_3prime_found = motif_3
+                            break
+
+                    # If 5' motif is found, 3' motif must also be found and compatible
+                    if motif_5prime_found:
+                        if not motif_3prime_found:
+                            should_keep = False
+                            strict_excluded_count += 1
+                            strict_excluded_ids.add(header_id)
+                            print(f"    Excluded {header_id}: has 5' motif {motif_5prime_found} but no compatible 3' motif in last 12nt: {last_12nt}", file=sys.stderr)
+                        else:
+                            # Check motif compatibility
+                            compatibility = config.get('motifs', {}).get('compatibility', {})
+                            compatible_3prime = compatibility.get(motif_5prime_found, [])
+                            if motif_3prime_found not in compatible_3prime:
+                                should_keep = False
+                                strict_excluded_count += 1
+                                strict_excluded_ids.add(header_id)
+                                print(f"    Excluded {header_id}: incompatible motif pair {motif_5prime_found} + {motif_3prime_found}", file=sys.stderr)
 
                 if should_keep:
                     outfile.write(current_header + '\n')

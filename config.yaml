@@ -63,6 +63,50 @@ upstream_length: 100
 # Strict mode for upstream extraction (only exact length regions)
 upstream_strict: true
 
+# Maximum extension distance to search for poly-T termination signal (in nucleotides)
+max_polyt_extension: 2000
+
+# Motif sequences for noeCR34335 lncRNA detection
+motifs:
+  5prime:
+    - GCGGT
+    - GTGGT
+    - GCGGC
+    - GCGAT
+
+  3prime:
+    - ATCGC
+    - ACCGC
+    - ATCAC
+    - ATTGC
+    - ACTGC
+    - ATCGT
+    - GTCGC
+
+  # Compatible 5' and 3' motif pairs
+  # Format: 5' motif -> list of compatible 3' motifs
+  compatibility:
+    GCGGT:
+      - ATCGC
+      - ACCGC
+      - ATTGC
+      - ACTGC
+      - ATCGT
+    GTGGT:
+      - ATCGC
+      - ACCGC
+      - ATCAC
+      - ATTGC
+      - ACTGC
+      - ATCGT
+    GCGGC:
+      - GTCGC
+    GCGAT:
+      - ATCGC
+
+# Pol III promoter score cutoff for noeCR34335 sequences
+pse_score_cutoff: 0.75
+
 # Similarity threshold for filtering nearly identical sequences (percentage)
 similarity_threshold: 98
 
@@ -97,6 +141,36 @@ promoter_annotation:
     promoter_start: 0
     promoter_length: 20
 
+  Platypezoidea:
+    kmers:
+      - AATTCRYR
+    promoter_start: 11
+    promoter_length: 20
+
+  Xylophagomorpha:
+    kmers:
+      - TATAATTCGC
+    promoter_start: 1
+    promoter_length: 20
+
+  Tabanomorpha:
+    kmers:
+      - TATAATTCRY
+    promoter_start: 0
+    promoter_length: 20
+
+  Asiloidea:
+    kmers:
+      - TATRATTCR
+    promoter_start: 0
+    promoter_length: 20
+
+  Nerioidea:
+    kmers:
+      - RATTCBCR
+    promoter_start: 0
+    promoter_length: 19
+
   Conopidae:
     kmers:
       - TATAATTCNY
@@ -119,6 +193,18 @@ promoter_annotation:
     kmers:
       - ATCGCG
 
+  Cacoxenus:
+    kmers:
+      - AYAATTCNCA
+    promoter_length: 21
+    promoter_start: 2
+
+  Leucophenga:
+    kmers:
+      - TAATWCRC
+    promoter_length: 21
+    promoter_start: 2
+  
   Drosophilidae:
     kmers:
       - TTCYCAA
@@ -135,9 +221,27 @@ promoter_annotation:
 
   Tachinidae:
     kmers:
-      - AATTCYCRT
+      - AAYYCYCRT
     promoter_length: 21
     promoter_start: 2
+
+  Sciomyzoidea:
+    kmers:
+      - TRRTTCNYA
+    promoter_length: 20
+    promoter_start: 0
+
+  Stratiomyidae:
+    kmers:
+      - TATRMBTYR
+    promoter_length: 20
+    promoter_start: 0
+  
+  Tephritidae:
+    kmers:
+      - AATTCDCRR
+    promoter_length: 19
+    promoter_start: 0
 
   Syrphidae:
     kmers:
