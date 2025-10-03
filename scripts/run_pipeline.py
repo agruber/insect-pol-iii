@@ -127,13 +127,20 @@ def run_upstream_pipeline(species_name: str, config: Dict, upstream_distance: Op
     if not check_required_files(species_dir, required_files):
         sys.exit(1)
     
-    # Check if genome.tsv exists in cache, if not, generate it
+    # Check if genome.tsv exists in cache and is not empty, if not, generate it
     cache_dir = Path("cache")
     cache_dir.mkdir(exist_ok=True)
     genome_tsv = cache_dir / f"{species_name}.tsv"
 
-    if not genome_tsv.exists():
-        print(f"Genome lengths not cached, generating {genome_tsv} from genome.fna.gz", file=sys.stderr)
+    # Regenerate if file doesn't exist or is empty (0 bytes)
+    needs_regeneration = not genome_tsv.exists() or genome_tsv.stat().st_size == 0
+
+    if needs_regeneration:
+        if genome_tsv.exists() and genome_tsv.stat().st_size == 0:
+            print(f"Genome lengths cache is empty (0 bytes), regenerating {genome_tsv}", file=sys.stderr)
+        else:
+            print(f"Genome lengths not cached, generating {genome_tsv} from genome.fna.gz", file=sys.stderr)
+
         # Add command to generate genome.tsv in cache
         genome_fna = species_dir / "genome.fna.gz"
         generate_tsv_cmd = f"zcat {genome_fna} | ./scripts/get_sequence_lengths.py > {genome_tsv}"
@@ -1015,8 +1022,16 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
                         # Check if this is an extended sequence
                         header_id = current_header[1:].split('|')[0]  # Extract ID from header
 
+                        # Check for non-ACGT nucleotides (like N)
+                        seq_upper = sequence.upper()
+                        if any(nuc not in 'ACGT' for nuc in seq_upper):
+                            should_keep = False
+                            strict_excluded_count += 1
+                            strict_excluded_ids.add(header_id)
+                            print(f"    Excluded {header_id}: contains non-ACGT nucleotides", file=sys.stderr)
+
                         # Exclude incomplete sequences in strict mode
-                        if header_id in incomplete_sequences:
+                        if should_keep and header_id in incomplete_sequences:
                             should_keep = False
                             strict_excluded_count += 1
                             # Add old ID to exclusion set (will be mapped later)
@@ -1025,8 +1040,6 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
 
                         # Check motif compatibility for ALL sequences
                         if should_keep:
-                            seq_upper = sequence.upper()
-
                             # Check for 5' motif in first 10 nt
                             first_10nt = seq_upper[:min(10, len(seq_upper))]
                             motif_5prime_found = None
@@ -1087,8 +1100,16 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
                 # Check if this is an extended sequence
                 header_id = current_header[1:].split('|')[0]  # Extract ID from header
 
+                # Check for non-ACGT nucleotides (like N)
+                seq_upper = sequence.upper()
+                if any(nuc not in 'ACGT' for nuc in seq_upper):
+                    should_keep = False
+                    strict_excluded_count += 1
+                    strict_excluded_ids.add(header_id)
+                    print(f"    Excluded {header_id}: contains non-ACGT nucleotides", file=sys.stderr)
+
                 # Exclude incomplete sequences in strict mode
-                if header_id in incomplete_sequences:
+                if should_keep and header_id in incomplete_sequences:
                     should_keep = False
                     strict_excluded_count += 1
                     # Add old ID to exclusion set (will be mapped later)
@@ -1097,7 +1118,6 @@ def run_noeCR34335_pipeline(species_name: str, config: Dict, output_file: Option
 
                 # Check motif compatibility for ALL sequences
                 if should_keep:
-                    seq_upper = sequence.upper()
 
                     # Check for 5' motif in first 10 nt
                     first_10nt = seq_upper[:min(10, len(seq_upper))]
