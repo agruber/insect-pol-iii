@@ -132,7 +132,7 @@ class SpeciesTreeExplorer:
         self.current_row = 0
         self.display_nodes = []
         self.selected_species = set()
-        self.start_taxon = start_taxon or "Arthropoda"
+        self.start_taxon = start_taxon or "Diptera"
         self.status_cache = {}
         
         # Build the tree
