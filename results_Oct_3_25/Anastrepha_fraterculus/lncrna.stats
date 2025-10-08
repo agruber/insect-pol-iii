@@ -1,0 +1,2 @@
+sequence_name	has_GCGGT_5prime	has_ATCGC_3prime	longest_polyT_stretch	trailing_T_count	motif_5prime_type	motif_3prime_type
+Ana_fra1|noeCR34335|JAYXIM020000001.1|25072437|25073276|-	1	1	3	6	GCGGT	ATCGC

@@ -1,0 +1,5 @@
+sequence_name	has_GCGGT_5prime	has_ATCGC_3prime	longest_polyT_stretch	trailing_T_count	motif_5prime_type	motif_3prime_type
+Sph_jav1|noeCR34335|JBANCZ010004095.1|8590|9010|-	1	1	3	10	GCGGT	ATCGC
+Sph_jav2|noeCR34335|JBANCZ010002911.1|10478|10869|+	1	1	3	9	GCGGT	ATCGC
+Sph_jav3|noeCR34335|JBANCZ010001526.1|16992|17333|-	1	1	4	8	GCGGT	ATCGC
+Sph_jav4|noeCR34335|JBANCZ010001526.1|12213|12482|-	1	1	4	6	GCGGT	ATCGC

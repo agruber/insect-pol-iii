@@ -1,0 +1,2 @@
+sequence_name	has_GCGGT_5prime	has_ATCGC_3prime	longest_polyT_stretch	trailing_T_count	motif_5prime_type	motif_3prime_type
+Dro_equ1|noeCR34335|CM120423.1|16701476|16703122|+	1	1	3	6	GTGGT	ATCGC

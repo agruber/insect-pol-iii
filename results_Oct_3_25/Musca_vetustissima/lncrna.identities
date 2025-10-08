@@ -1,0 +1,11 @@
+Sequence1	Sequence2	Identity
+Mus_vet7	Mus_vet8	43.6
+Mus_vet7	Mus_vet1	33.0
+Mus_vet7	Mus_vet2	17.2
+Mus_vet7	Mus_vet3	16.2
+Mus_vet8	Mus_vet1	34.8
+Mus_vet8	Mus_vet2	18.3
+Mus_vet8	Mus_vet3	19.1
+Mus_vet1	Mus_vet2	48.8
+Mus_vet1	Mus_vet3	47.5
+Mus_vet2	Mus_vet3	84.8

@@ -1,0 +1,3 @@
+sequence_name	has_GCGGT_5prime	has_ATCGC_3prime	longest_polyT_stretch	trailing_T_count	motif_5prime_type	motif_3prime_type
+Myc_poe1|noeCR34335|JBEQPP010007031.1|884|2054|+	1	1	4	7	GCGGT	ATCGC
+Myc_poe2|noeCR34335|JBEQPP010010798.1|360|651|+	1	1	4	5	GCGGT	ATCGC

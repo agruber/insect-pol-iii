@@ -1,0 +1,7 @@
+Sequence1	Sequence2	Identity
+Cer_ros1	Cer_ros2	19.5
+Cer_ros1	Cer_ros3	19.4
+Cer_ros1	Cer_ros4	19.4
+Cer_ros2	Cer_ros3	99.6
+Cer_ros2	Cer_ros4	99.6
+Cer_ros3	Cer_ros4	100.0

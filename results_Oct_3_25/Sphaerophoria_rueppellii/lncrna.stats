@@ -1,0 +1,3 @@
+sequence_name	has_GCGGT_5prime	has_ATCGC_3prime	longest_polyT_stretch	trailing_T_count	motif_5prime_type	motif_3prime_type
+Sph_rue1|noeCR34335|CAKKXW010000001.1|113469386|113469708|-	1	1	2	6	GCGGT	ATCGC
+Sph_rue2|noeCR34335|CAKKXW010000001.1|36042256|36042572|-	1	1	3	5	GCGGT	ATCGC

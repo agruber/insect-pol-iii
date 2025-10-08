@@ -1,0 +1,2 @@
+sequence_name	has_GCGGT_5prime	has_ATCGC_3prime	longest_polyT_stretch	trailing_T_count	motif_5prime_type	motif_3prime_type
+Con_qua1|noeCR34335|OX457080.1|16058848|16059491|-	1	1	3	13	GCGGT	ATCGC

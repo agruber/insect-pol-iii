@@ -1,0 +1,4 @@
+sequence_name	has_GCGGT_5prime	has_ATCGC_3prime	longest_polyT_stretch	trailing_T_count	motif_5prime_type	motif_3prime_type
+Bac_cor1|noeCR34335|CM050326.1|80905289|80906207|-	1	1	3	8	GCGGT	ATCGC
+Bac_cor2|noeCR34335|CM050323.1|55344070|55344510|+	1	1	4	7	GCGGT	ATCGC
+Bac_cor3|noeCR34335|CM050325.1|90329829|90330123|-	1	1	4	6	GCGGT	ATCGC

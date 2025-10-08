@@ -1,0 +1,4 @@
+sequence_name	has_GCGGT_5prime	has_ATCGC_3prime	longest_polyT_stretch	trailing_T_count	motif_5prime_type	motif_3prime_type
+Ser_sil1|noeCR34335|OZ183052.1|40121342|40121610|+	1	1	3	14	GCGGT	ATCGC
+Ser_sil2|noeCR34335|OZ183050.1|122687615|122687813|+	1	1	3	5	GCGGT	ATCGC
+Ser_sil3|noeCR34335|OZ183050.1|122686957|122687126|-	1	1	3	6	GCGGT	ATCGC

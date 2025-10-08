@@ -1,0 +1,2 @@
+sequence_name	has_GCGGT_5prime	has_ATCGC_3prime	longest_polyT_stretch	trailing_T_count	motif_5prime_type	motif_3prime_type
+Tet_fer1|noeCR34335|OY282641.1|128678173|128678611|-	1	1	3	7	GCGGT	ATCGC

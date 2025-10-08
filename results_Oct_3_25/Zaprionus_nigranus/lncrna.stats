@@ -1,0 +1,2 @@
+sequence_name	has_GCGGT_5prime	has_ATCGC_3prime	longest_polyT_stretch	trailing_T_count	motif_5prime_type	motif_3prime_type
+Zap_nig1|noeCR34335|JAEIGD010000009.1|200221|201644|+	1	1	4	9	GCGGT	ATCGC
